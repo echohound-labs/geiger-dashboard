@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Geiger Entropy Oracle — Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --geiger-green: #1D9E75;
+    --geiger-green-dim: #0F6E56;
+    --geiger-green-bright: #5DCAA5;
+    --geiger-green-bg: #E1F5EE;
+    --geiger-amber: #BA7517;
+    --geiger-amber-bg: #FAEEDA;
+    --geiger-red: #E24B4A;
+    --geiger-red-bg: #FCEBEB;
+    --mono: 'Space Mono', monospace;
+    --display: 'Syne', sans-serif;
+    --bg-primary: #ffffff;
+    --bg-secondary: #f5f5f3;
+    --text-primary: #1a1a18;
+    --text-secondary: #6b6b68;
+    --border: rgba(0,0,0,0.12);
+    --border-hover: rgba(0,0,0,0.22);
+    --radius-md: 8px;
+    --radius-lg: 12px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg-primary: #18181a;
+      --bg-secondary: #222224;
+      --text-primary: #f0f0ee;
+      --text-secondary: #8a8a88;
+      --border: rgba(255,255,255,0.1);
+      --border-hover: rgba(255,255,255,0.2);
+      --geiger-green-bg: #04342C;
+      --geiger-amber-bg: #412402;
+      --geiger-red-bg: #501313;
+    }
+  }
+
+  body {
+    font-family: var(--display);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    min-height: 100vh;
+    padding: 24px;
+  }
+
+  .dashboard {
+    max-width: 980px;
+    margin: 0 auto;
+    background: var(--bg-primary);
+    border-radius: var(--radius-lg);
+    border: 0.5px solid var(--border);
+    overflow: hidden;
+    box-shadow: 0 4px 32px rgba(0,0,0,0.06);
+  }
+
+  /* ---- HEADER ---- */
+  .g-header {
+    padding: 20px 28px 16px;
+    border-bottom: 0.5px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .g-logo {
+    width: 40px; height: 40px;
+    border-radius: 10px;
+    background: var(--geiger-green);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .g-logo-pulse {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: #fff;
+    animation: pulse-ring 1.6s ease-out infinite;
+  }
+
+  @keyframes pulse-ring {
+    0%   { box-shadow: 0 0 0 0 rgba(255,255,255,0.8); }
+    60%  { box-shadow: 0 0 0 9px rgba(255,255,255,0); }
+    100% { box-shadow: 0 0 0 0 rgba(255,255,255,0); }
+  }
+
+  .g-title { font-size: 17px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.3px; }
+  .g-subtitle { font-size: 11px; color: var(--text-secondary); font-family: var(--mono); margin-top: 2px; }
+
+  .g-live-badge {
+    margin-left: auto;
+    display: flex; align-items: center; gap: 6px;
+    font-family: var(--mono); font-size: 11px;
+    color: var(--geiger-green);
+    background: var(--geiger-green-bg);
+    padding: 5px 12px; border-radius: 100px;
+  }
+
+  .g-live-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--geiger-green);
+    animation: blink 1.2s step-end infinite;
+  }
+
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.15} }
+
+  /* ---- NAV TABS ---- */
+  .g-nav {
+    display: flex;
+    border-bottom: 0.5px solid var(--border);
+    padding: 0 28px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .g-nav::-webkit-scrollbar { display: none; }
+
+  .g-tab {
+    padding: 13px 18px;
+    font-size: 13px; font-weight: 500;
+    color: var(--text-secondary);
+    background: none; border: none; cursor: pointer;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+    transition: color 0.15s;
+    font-family: var(--display);
+  }
+  .g-tab.active { color: var(--geiger-green); border-bottom-color: var(--geiger-green); }
+  .g-tab:hover { color: var(--text-primary); }
+
+  /* ---- PANELS ---- */
+  .g-panel { display: none; padding: 24px 28px; }
+  .g-panel.active { display: block; }
+
+  /* ---- STAT GRID ---- */
+  .g-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+
+  .g-stat {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    padding: 14px 16px;
+  }
+
+  .g-stat-label {
+    font-size: 10px;
+    color: var(--text-secondary);
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin-bottom: 6px;
+  }
+
+  .g-stat-value {
+    font-size: 24px; font-weight: 700;
+    color: var(--text-primary);
+    font-family: var(--mono); line-height: 1;
+  }
+
+  .g-stat-delta { font-size: 11px; font-family: var(--mono); margin-top: 5px; }
+  .g-stat-delta.up   { color: var(--geiger-green); }
+  .g-stat-delta.warn { color: var(--geiger-amber); }
+
+  .g-section-title {
+    font-size: 11px; font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase; letter-spacing: 0.9px;
+    margin-bottom: 12px; font-family: var(--mono);
+  }
+
+  /* ---- CPM BARS ---- */
+  .g-cpm-bar-wrap {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    padding: 16px; margin-bottom: 24px;
+  }
+
+  .g-cpm-label { font-size: 11px; color: var(--text-secondary); font-family: var(--mono); margin-bottom: 10px; }
+
+  .g-cpm-bars { display: flex; align-items: flex-end; gap: 4px; height: 64px; }
+
+  .g-bar {
+    flex: 1; background: var(--geiger-green-bright);
+    border-radius: 3px 3px 0 0; min-width: 6px;
+    transition: height 0.35s ease; opacity: 0.65;
+  }
+  .g-bar.current { opacity: 1; background: var(--geiger-green); }
+
+  /* ---- EVENT FEED ---- */
+  .g-feed {
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius-md);
+    overflow: hidden; margin-bottom: 24px;
+  }
+
+  .g-feed-header {
+    padding: 9px 16px;
+    background: var(--bg-secondary);
+    display: flex; align-items: center; gap: 8px;
+    border-bottom: 0.5px solid var(--border);
+  }
+
+  .g-feed-title { font-size: 12px; font-weight: 600; color: var(--text-primary); font-family: var(--mono); }
+  .g-feed-count { font-size: 11px; color: var(--text-secondary); font-family: var(--mono); margin-left: auto; }
+  .g-feed-body  { max-height: 260px; overflow-y: auto; }
+
+  .g-event {
+    display: flex; align-items: center; gap: 12px;
+    padding: 9px 16px;
+    border-bottom: 0.5px solid var(--border);
+    font-family: var(--mono); font-size: 12px;
+    animation: slide-in 0.25s ease-out;
+  }
+  .g-event:last-child { border-bottom: none; }
+
+  @keyframes slide-in {
+    from { opacity: 0; transform: translateY(-3px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .g-event-type { font-size: 10px; padding: 2px 8px; border-radius: 4px; font-weight: 700; flex-shrink: 0; }
+  .g-event-type.decay  { background: var(--geiger-green-bg); color: var(--geiger-green-dim); }
+  .g-event-type.commit { background: var(--geiger-amber-bg); color: var(--geiger-amber); }
+  .g-event-type.reveal { background: #E6F1FB; color: #185FA5; }
+
+  .g-event-seq  { color: var(--text-secondary); flex-shrink: 0; }
+  .g-event-hash { color: var(--text-primary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .g-event-time { color: var(--text-secondary); flex-shrink: 0; font-size: 11px; }
+
+  /* ---- CONFIG PANEL ---- */
+  .g-code-block {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    padding: 16px; margin-bottom: 20px;
+    font-size: 12px; font-family: var(--mono);
+    color: var(--text-secondary); line-height: 1.9;
+  }
+
+  .g-config-table {
+    width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 20px;
+    border: 0.5px solid var(--border); border-radius: var(--radius-md); overflow: hidden;
+  }
+
+  .g-config-table tr { border-bottom: 0.5px solid var(--border); }
+  .g-config-table tr:last-child { border-bottom: none; }
+  .g-config-table td { padding: 11px 16px; vertical-align: middle; }
+
+  .g-config-key  { font-family: var(--mono); color: var(--text-secondary); font-size: 12px; width: 38%; }
+  .g-config-val  { font-family: var(--mono); color: var(--text-primary); font-weight: 700; font-size: 13px; }
+  .g-config-desc { color: var(--text-secondary); font-size: 12px; text-align: right; }
+
+  .g-pda-card {
+    border: 0.5px solid var(--border); border-radius: var(--radius-md);
+    padding: 12px 16px; margin-bottom: 10px;
+    display: flex; align-items: center; gap: 12px;
+  }
+
+  .g-pda-icon  { font-size: 18px; color: var(--geiger-green); flex-shrink: 0; }
+  .g-pda-label { font-size: 11px; color: var(--text-secondary); font-family: var(--mono); }
+  .g-pda-addr  { font-size: 12px; font-family: var(--mono); color: var(--text-primary); word-break: break-all; }
+
+  .g-copy-btn {
+    margin-left: auto; flex-shrink: 0;
+    background: none; border: 0.5px solid var(--border);
+    border-radius: 6px; padding: 4px 10px;
+    font-size: 11px; color: var(--text-secondary);
+    cursor: pointer; font-family: var(--mono);
+    transition: background 0.15s;
+  }
+  .g-copy-btn:hover { background: var(--bg-secondary); }
+
+  /* ---- ADMIN PANEL ---- */
+  .g-wallet-bar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 11px 16px;
+    border: 0.5px solid var(--border); border-radius: var(--radius-md);
+    margin-bottom: 16px; font-size: 12px; font-family: var(--mono);
+  }
+
+  .g-wallet-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--geiger-red); }
+  .g-wallet-dot.connected { background: var(--geiger-green); }
+  .g-wallet-status { color: var(--text-secondary); }
+  .g-wallet-addr { color: var(--text-primary); margin-left: auto; }
+
+  .g-connect-btn {
+    background: none; border: 0.5px solid var(--border-hover);
+    border-radius: 6px; padding: 6px 14px;
+    font-size: 12px; font-family: var(--mono);
+    cursor: pointer; color: var(--text-primary);
+    transition: background 0.15s;
+  }
+  .g-connect-btn:hover { background: var(--bg-secondary); }
+
+  .g-admin-section {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-lg); padding: 18px; margin-bottom: 20px;
+  }
+
+  .g-admin-title {
+    font-size: 13px; font-weight: 600; color: var(--text-primary);
+    margin-bottom: 14px; display: flex; align-items: center; gap: 8px;
+  }
+
+  .g-input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+  .g-input-group { display: flex; flex-direction: column; gap: 5px; }
+
+  .g-input-label { font-size: 11px; color: var(--text-secondary); font-family: var(--mono); }
+
+  .g-input {
+    font-family: var(--mono); font-size: 13px;
+    background: var(--bg-primary); color: var(--text-primary);
+    border: 0.5px solid var(--border); border-radius: var(--radius-md);
+    padding: 8px 12px; width: 100%;
+    transition: border-color 0.15s;
+  }
+  .g-input:focus { outline: none; border-color: var(--geiger-green); }
+
+  .g-btn-primary {
+    background: var(--geiger-green); color: #fff;
+    border: none; border-radius: var(--radius-md);
+    padding: 11px 20px; font-size: 13px; font-weight: 600;
+    cursor: pointer; font-family: var(--display); width: 100%;
+    transition: opacity 0.15s;
+  }
+  .g-btn-primary:hover:not(:disabled) { opacity: 0.85; }
+  .g-btn-primary:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  .g-tx-status {
+    margin-top: 10px; font-size: 12px;
+    font-family: var(--mono); color: var(--text-secondary);
+    min-height: 20px;
+  }
+
+  .g-tuning-rules {
+    border: 0.5px solid var(--border); border-radius: var(--radius-md); overflow: hidden;
+  }
+
+  .g-rule {
+    display: flex; align-items: center; gap: 12px;
+    padding: 11px 16px; border-bottom: 0.5px solid var(--border);
+    font-size: 12px; font-family: var(--mono);
+  }
+  .g-rule:last-child { border-bottom: none; }
+  .g-rule-cond   { color: var(--text-secondary); flex: 1; }
+  .g-rule-arrow  { color: var(--border-hover); }
+  .g-rule-action { font-weight: 700; color: var(--text-primary); }
+  .g-rule-badge  { font-size: 10px; padding: 2px 9px; border-radius: 100px; flex-shrink: 0; }
+  .g-rule-badge.hot  { background: var(--geiger-red-bg);   color: var(--geiger-red); }
+  .g-rule-badge.warm { background: var(--geiger-amber-bg); color: var(--geiger-amber); }
+  .g-rule-badge.cool { background: var(--geiger-green-bg); color: var(--geiger-green-dim); }
+
+  /* ---- COST ESTIMATOR ---- */
+  .g-cost-estimator {
+    border: 0.5px solid var(--border); border-radius: var(--radius-lg);
+    overflow: hidden; margin-bottom: 24px;
+  }
+
+  .g-cost-header {
+    padding: 13px 18px;
+    background: var(--bg-secondary);
+    border-bottom: 0.5px solid var(--border);
+    font-size: 13px; font-weight: 600; color: var(--text-primary);
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  .g-cost-body { padding: 18px; }
+
+  .g-slider-row { margin-bottom: 18px; }
+
+  .g-slider-top {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 8px;
+  }
+
+  .g-slider-name { font-size: 12px; color: var(--text-secondary); font-family: var(--mono); }
+  .g-slider-val  { font-size: 13px; font-weight: 700; font-family: var(--mono); color: var(--text-primary); }
+
+  input[type="range"] {
+    width: 100%; accent-color: var(--geiger-green);
+    height: 4px; cursor: pointer;
+  }
+
+  .g-cost-result {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 18px;
+  }
+
+  .g-cost-item {
+    text-align: center; padding: 12px;
+    background: var(--bg-secondary); border-radius: var(--radius-md);
+  }
+
+  .g-cost-item-label { font-size: 10px; color: var(--text-secondary); font-family: var(--mono); margin-bottom: 5px; }
+  .g-cost-item-val   { font-size: 18px; font-weight: 700; font-family: var(--mono); color: var(--text-primary); }
+  .g-cost-item-val.green { color: var(--geiger-green); }
+
+  /* ---- ROADMAP ---- */
+  .g-phase-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+
+  .g-phase {
+    display: flex; gap: 14px; align-items: flex-start;
+    padding: 14px 16px;
+    border: 0.5px solid var(--border); border-radius: var(--radius-md);
+  }
+
+  .g-phase-num {
+    width: 26px; height: 26px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; font-family: var(--mono); flex-shrink: 0;
+  }
+  .g-phase-num.done        { background: var(--geiger-green-bg); color: var(--geiger-green-dim); }
+  .g-phase-num.in-progress { background: var(--geiger-amber-bg); color: var(--geiger-amber); }
+  .g-phase-num.pending     { background: var(--bg-secondary); color: var(--text-secondary); }
+
+  .g-phase-name { font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 3px; }
+  .g-phase-desc { font-size: 12px; color: var(--text-secondary); }
+  .g-phase-meta { margin-left: auto; flex-shrink: 0; }
+
+  .g-status-pill {
+    font-size: 10px; font-family: var(--mono);
+    padding: 3px 10px; border-radius: 100px;
+  }
+  .g-status-pill.live     { background: var(--geiger-green-bg); color: var(--geiger-green-dim); }
+  .g-status-pill.building { background: var(--geiger-amber-bg); color: var(--geiger-amber); }
+  .g-status-pill.planned  { background: var(--bg-secondary); color: var(--text-secondary); border: 0.5px solid var(--border); }
+
+  .g-token-card {
+    background: linear-gradient(135deg, #085041 0%, #0F6E56 50%, #1D9E75 100%);
+    border-radius: var(--radius-lg); padding: 22px; color: #fff;
+    margin-bottom: 16px; position: relative; overflow: hidden;
+  }
+
+  .g-token-card::before {
+    content: ''; position: absolute; top: -30px; right: -30px;
+    width: 110px; height: 110px; border-radius: 50%;
+    background: rgba(255,255,255,0.06);
+  }
+
+  .g-token-name { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 4px; }
+  .g-token-sub  { font-size: 12px; opacity: 0.65; font-family: var(--mono); margin-bottom: 18px; }
+
+  .g-token-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  .g-token-stat-label { font-size: 10px; opacity: 0.65; font-family: var(--mono); margin-bottom: 4px; }
+  .g-token-stat-val   { font-size: 20px; font-weight: 700; font-family: var(--mono); }
+
+  .g-airdrop-notice {
+    border: 0.5px solid var(--geiger-amber);
+    border-radius: var(--radius-md); padding: 14px 16px;
+    background: var(--geiger-amber-bg);
+    display: flex; gap: 12px; align-items: flex-start;
+    font-size: 12px; line-height: 1.6;
+  }
+
+  .g-airdrop-icon { font-size: 18px; color: var(--geiger-amber); flex-shrink: 0; margin-top: 1px; }
+  .g-airdrop-text { color: var(--geiger-amber); }
+  .g-airdrop-text strong { font-weight: 600; }
+
+  .g-progress-bar {
+    height: 4px; background: rgba(186,117,23,0.2);
+    border-radius: 2px; overflow: hidden; margin-top: 8px;
+  }
+
+  .g-progress-fill {
+    height: 100%; background: var(--geiger-amber);
+    border-radius: 2px; width: 68%;
+    animation: fill-progress 2s ease-out both;
+  }
+
+  @keyframes fill-progress { from { width: 0; } }
+
+  /* ---- FOOTER ---- */
+  .g-footer {
+    padding: 14px 28px;
+    border-top: 0.5px solid var(--border);
+    display: flex; align-items: center; gap: 12px;
+    font-size: 11px; font-family: var(--mono); color: var(--text-secondary);
+  }
+
+  .g-footer-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--geiger-green); animation: blink 1.2s step-end infinite; }
+</style>
+</head>
+<body>
+<div class="dashboard">
+
+  <!-- HEADER -->
+  <div class="g-header">
+    <div class="g-logo"><div class="g-logo-pulse"></div></div>
+    <div>
+      <div class="g-title">Geiger Entropy Oracle</div>
+      <div class="g-subtitle">BxUNg2yo5371BQMZPkfcxdCptFRDHkhvEXNM1QNPBRYU · mainnet-beta</div>
+    </div>
+    <div class="g-live-badge">
+      <div class="g-live-dot"></div>
+      LIVE
+    </div>
+  </div>
+
+  <!-- NAV -->
+  <div class="g-nav">
+    <button class="g-tab active" onclick="switchTab('overview', this)">Overview</button>
+    <button class="g-tab" onclick="switchTab('config', this)">On-chain Config</button>
+    <button class="g-tab" onclick="switchTab('admin', this)">Admin Panel</button>
+    <button class="g-tab" onclick="switchTab('estimator', this)">Cost Estimator</button>
+    <button class="g-tab" onclick="switchTab('roadmap', this)">Roadmap</button>
+  </div>
+
+  <!-- ========== OVERVIEW ========== -->
+  <div id="tab-overview" class="g-panel active">
+    <div class="g-stat-grid">
+      <div class="g-stat">
+        <div class="g-stat-label">Sequence</div>
+        <div class="g-stat-value" id="seq-val">40,641</div>
+        <div class="g-stat-delta up" id="seq-delta">↑ +3 this hour</div>
+      </div>
+      <div class="g-stat">
+        <div class="g-stat-label">CPM</div>
+        <div class="g-stat-value" id="cpm-val">47</div>
+        <div class="g-stat-delta up">avg this epoch</div>
+      </div>
+      <div class="g-stat">
+        <div class="g-stat-label">Pool Size</div>
+        <div class="g-stat-value">1000</div>
+        <div class="g-stat-delta warn">⚡ 82% full</div>
+      </div>
+      <div class="g-stat">
+        <div class="g-stat-label">Uptime</div>
+        <div class="g-stat-value">99.8%</div>
+        <div class="g-stat-delta up">47d running</div>
+      </div>
+      <div class="g-stat">
+        <div class="g-stat-label">VDF Iters</div>
+        <div class="g-stat-value">5M</div>
+        <div class="g-stat-delta up">on-chain verified</div>
+      </div>
+      <div class="g-stat">
+        <div class="g-stat-label">Sleep</div>
+        <div class="g-stat-value">300s</div>
+        <div class="g-stat-delta warn">auto-tune ready</div>
+      </div>
+    </div>
+
+    <div class="g-section-title">Decay events · counts per minute (live)</div>
+    <div class="g-cpm-bar-wrap">
+      <div class="g-cpm-label">CPM sparkline — last 30 ticks</div>
+      <div class="g-cpm-bars" id="cpm-bars"></div>
+    </div>
+
+    <div class="g-section-title">Live decay event feed</div>
+    <div class="g-feed">
+      <div class="g-feed-header">
+        <span class="g-feed-title"><i class="ti ti-activity" aria-hidden="true"></i> Events</span>
+        <span class="g-feed-count" id="event-count">0 events</span>
+      </div>
+      <div class="g-feed-body" id="event-feed"></div>
+    </div>
+  </div>
+
+  <!-- ========== ON-CHAIN CONFIG ========== -->
+  <div id="tab-config" class="g-panel">
+    <div class="g-section-title">OracleConfig struct (Phase 1 — Anchor/Rust)</div>
+    <div class="g-code-block">
+      <span style="color:var(--geiger-green)">pub struct</span> OracleConfig {<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--text-primary)">pub sleep_seconds</span>: <span style="color:var(--geiger-amber)">u64</span>,<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--text-primary)">pub vdf_iterations</span>: <span style="color:var(--geiger-amber)">u64</span>,<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--text-primary)">pub oracle_fee</span>: <span style="color:var(--geiger-amber)">u64</span>,<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--text-primary)">pub min_pool_size</span>: <span style="color:var(--geiger-amber)">u32</span>,<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--text-primary)">pub admin</span>: <span style="color:var(--geiger-amber)">Pubkey</span>,<br>
+      }
+    </div>
+
+    <div class="g-section-title">Current on-chain values</div>
+    <table class="g-config-table">
+      <tbody>
+        <tr><td class="g-config-key">sleep_seconds</td><td class="g-config-val">300</td><td class="g-config-desc">5 min cycle</td></tr>
+        <tr><td class="g-config-key">vdf_iterations</td><td class="g-config-val">5,000,000</td><td class="g-config-desc">delay function</td></tr>
+        <tr><td class="g-config-key">oracle_fee</td><td class="g-config-val">10,000</td><td class="g-config-desc">lamports</td></tr>
+        <tr><td class="g-config-key">min_pool_size</td><td class="g-config-val">1,000</td><td class="g-config-desc">entropy units</td></tr>
+        <tr><td class="g-config-key">admin</td><td class="g-config-val" style="font-size:11px">HGFisV...iodo</td><td class="g-config-desc">mainnet-deployer</td></tr>
+      </tbody>
+    </table>
+
+    <div class="g-section-title">Key program addresses</div>
+    <div id="pda-list"></div>
+  </div>
+
+  <!-- ========== ADMIN PANEL ========== -->
+  <div id="tab-admin" class="g-panel">
+    <div class="g-wallet-bar">
+      <div class="g-wallet-dot" id="wallet-dot"></div>
+      <span class="g-wallet-status" id="wallet-status">Wallet not connected</span>
+      <span class="g-wallet-addr" id="wallet-addr"></span>
+      <button class="g-connect-btn" id="connect-btn" onclick="toggleWallet()">Connect wallet</button>
+    </div>
+
+    <div class="g-admin-section">
+      <div class="g-admin-title">
+        <i class="ti ti-settings" aria-hidden="true" style="font-size:16px;color:var(--geiger-green)"></i>
+        Update OracleConfig params
+      </div>
+      <div class="g-input-row">
+        <div class="g-input-group">
+          <label class="g-input-label" for="inp-sleep">sleep_seconds</label>
+          <input type="number" class="g-input" id="inp-sleep" value="300" min="30" max="3600">
+        </div>
+        <div class="g-input-group">
+          <label class="g-input-label" for="inp-vdf">vdf_iterations</label>
+          <input type="number" class="g-input" id="inp-vdf" value="5000000" min="1000000">
+        </div>
+        <div class="g-input-group">
+          <label class="g-input-label" for="inp-fee">oracle_fee (lamports)</label>
+          <input type="number" class="g-input" id="inp-fee" value="10000" min="0">
+        </div>
+        <div class="g-input-group">
+          <label class="g-input-label" for="inp-pool">min_pool_size</label>
+          <input type="number" class="g-input" id="inp-pool" value="1000" min="100">
+        </div>
+      </div>
+      <button class="g-btn-primary" id="update-btn" onclick="simulateUpdate()" disabled>
+        Sign &amp; submit update_config →
+      </button>
+      <div class="g-tx-status" id="tx-status"></div>
+    </div>
+
+    <div class="g-section-title">Phase 4 · auto-tuning rules</div>
+    <div class="g-tuning-rules">
+      <div class="g-rule">
+        <span class="g-rule-cond">pending requests &gt; 10</span>
+        <span class="g-rule-arrow">→</span>
+        <span class="g-rule-action">sleep = 60s</span>
+        <span class="g-rule-badge hot">HIGH DEMAND</span>
+      </div>
+      <div class="g-rule">
+        <span class="g-rule-cond">pending requests 1–10</span>
+        <span class="g-rule-arrow">→</span>
+        <span class="g-rule-action">sleep = 180s</span>
+        <span class="g-rule-badge warm">MODERATE</span>
+      </div>
+      <div class="g-rule">
+        <span class="g-rule-cond">pending requests = 0</span>
+        <span class="g-rule-arrow">→</span>
+        <span class="g-rule-action">sleep = 300s</span>
+        <span class="g-rule-badge cool">IDLE</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== COST ESTIMATOR ========== -->
+  <div id="tab-estimator" class="g-panel">
+    <div class="g-cost-estimator">
+      <div class="g-cost-header">
+        <i class="ti ti-calculator" aria-hidden="true" style="font-size:16px;color:var(--geiger-green)"></i>
+        XNT / day cost estimator
+      </div>
+      <div class="g-cost-body">
+        <div class="g-slider-row">
+          <div class="g-slider-top">
+            <span class="g-slider-name">sleep_seconds</span>
+            <span class="g-slider-val" id="sleep-display">300s</span>
+          </div>
+          <input type="range" min="30" max="600" step="30" value="300" id="sleep-slider" oninput="updateEstimate()">
+        </div>
+        <div class="g-slider-row">
+          <div class="g-slider-top">
+            <span class="g-slider-name">oracle_fee (lamports)</span>
+            <span class="g-slider-val" id="fee-display">10,000</span>
+          </div>
+          <input type="range" min="1000" max="100000" step="1000" value="10000" id="fee-slider" oninput="updateEstimate()">
+        </div>
+        <div class="g-slider-row">
+          <div class="g-slider-top">
+            <span class="g-slider-name">RISE Phoenix requests / day</span>
+            <span class="g-slider-val" id="req-display">50</span>
+          </div>
+          <input type="range" min="1" max="500" step="1" value="50" id="req-slider" oninput="updateEstimate()">
+        </div>
+        <div class="g-cost-result">
+          <div class="g-cost-item">
+            <div class="g-cost-item-label">cycles / day</div>
+            <div class="g-cost-item-val" id="cycles-out">288</div>
+          </div>
+          <div class="g-cost-item">
+            <div class="g-cost-item-label">tx fees / day (SOL)</div>
+            <div class="g-cost-item-val" id="txfee-out">0.00144</div>
+          </div>
+          <div class="g-cost-item">
+            <div class="g-cost-item-label">oracle revenue / day (SOL)</div>
+            <div class="g-cost-item-val green" id="rev-out">0.00050</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p style="font-size:12px;color:var(--text-secondary);font-family:var(--mono);text-align:center;margin-top:8px;">
+      Tx fee estimate: 5000 lamports/tx · 1 SOL = 1,000,000,000 lamports
+    </p>
+  </div>
+
+  <!-- ========== ROADMAP ========== -->
+  <div id="tab-roadmap" class="g-panel">
+    <div class="g-phase-list">
+      <div class="g-phase">
+        <div class="g-phase-num done">1</div>
+        <div>
+          <div class="g-phase-name">On-chain Config Account</div>
+          <div class="g-phase-desc">OracleConfig PDA · initialize_config · update_config (admin only)</div>
+        </div>
+        <div class="g-phase-meta"><span class="g-status-pill building">building</span></div>
+      </div>
+      <div class="g-phase">
+        <div class="g-phase-num in-progress">2</div>
+        <div>
+          <div class="g-phase-name">Daemon On-chain Config Pull</div>
+          <div class="g-phase-desc">daemon.py reads sleep &amp; VDF from chain each cycle — no restart needed</div>
+        </div>
+        <div class="g-phase-meta"><span class="g-status-pill building">building</span></div>
+      </div>
+      <div class="g-phase">
+        <div class="g-phase-num pending">3</div>
+        <div>
+          <div class="g-phase-name">Geiger Dashboard</div>
+          <div class="g-phase-desc">This app · live stats · admin panel · cost estimator · Vercel deploy</div>
+        </div>
+        <div class="g-phase-meta"><span class="g-status-pill planned">planned</span></div>
+      </div>
+      <div class="g-phase">
+        <div class="g-phase-num pending">4</div>
+        <div>
+          <div class="g-phase-name">Auto-tuning Daemon</div>
+          <div class="g-phase-desc">Demand-aware sleep tuning · mint activity monitoring · pool drain rate</div>
+        </div>
+        <div class="g-phase-meta"><span class="g-status-pill planned">planned</span></div>
+      </div>
+      <div class="g-phase">
+        <div class="g-phase-num pending">5</div>
+        <div>
+          <div class="g-phase-name">ENTROPY Token</div>
+          <div class="g-phase-desc">Retroactive airdrop · per-fulfillment emission · governance · staking</div>
+        </div>
+        <div class="g-phase-meta"><span class="g-status-pill planned">planned</span></div>
+      </div>
+    </div>
+
+    <div class="g-token-card">
+      <div class="g-token-name">ENTROPY</div>
+      <div class="g-token-sub">physical radioactive decay · on-chain verifiable proof</div>
+      <div class="g-token-stats">
+        <div>
+          <div class="g-token-stat-label">genesis cycles</div>
+          <div class="g-token-stat-val">40,641+</div>
+        </div>
+        <div>
+          <div class="g-token-stat-label">airdrop basis</div>
+          <div class="g-token-stat-val">seq 0→now</div>
+        </div>
+        <div>
+          <div class="g-token-stat-label">emission model</div>
+          <div class="g-token-stat-val">per fulfil</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="g-airdrop-notice">
+      <i class="ti ti-gift g-airdrop-icon" aria-hidden="true" style="font-size:18px;color:var(--geiger-amber);flex-shrink:0;margin-top:1px"></i>
+      <div class="g-airdrop-text">
+        <strong>Retroactive genesis airdrop:</strong> all commit-reveal cycles from seq 0 to current (~40,641+) are verifiable on-chain. ENTROPY emission will reward the genesis node operator for every fulfilled randomness request.
+        <div class="g-progress-bar"><div class="g-progress-fill"></div></div>
+        <div style="margin-top:5px;font-size:11px;opacity:0.8">Tokenomics design: 68% scoped</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="g-footer">
+    <div class="g-footer-dot"></div>
+    <span>echohound-labs · geiger-entropy-oracle · mainnet-deployer.json</span>
+    <span style="margin-left:auto">daemon running · sleep=300s · VDF=5M</span>
+  </div>
+
+</div>
+
+<script>
+// ---- Tab switching ----
+function switchTab(name, btn) {
+  document.querySelectorAll('.g-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.g-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  if (btn) btn.classList.add('active');
+}
+
+// ---- PDA list ----
+const PDAS = [
+  { label: 'Oracle program',   addr: 'BxUNg2yo5371BQMZPkfcxdCptFRDHkhvEXNM1QNPBRYU', icon: 'ti-cpu' },
+  { label: 'Oracle state PDA', addr: 'BygMTZ1oLBD9tDmssnt9LkNT7BEd2PCJBCzurwtMuTqm', icon: 'ti-database' },
+  { label: 'Entropy pool PDA', addr: 'GDECYXCXietabJs9Y1baKzD3t4VFBw4eZWPnvYenyi77', icon: 'ti-droplet' },
+  { label: 'Entropy node',     addr: 'z4Psp8qVfP4t3jiWHE29rrisTPMC78tu8LmDhRSEL3s', icon: 'ti-radio' },
+  { label: 'RISE Phoenix',     addr: '5QUVVnm1duiRazqa69KW9ZQhCCZcg5GBUKkUn5avA8Gb', icon: 'ti-flame' },
+  { label: 'Testnet oracle',   addr: '2dQf9uaCzXewrDNLttmtzQmc3SmqfAHz3qahKQjtGQyY', icon: 'ti-flask' },
+];
+
+const pdaList = document.getElementById('pda-list');
+PDAS.forEach(p => {
+  const short = p.addr.slice(0,8) + '...' + p.addr.slice(-6);
+  const card = document.createElement('div');
+  card.className = 'g-pda-card';
+  card.innerHTML = `
+    <i class="ti ${p.icon} g-pda-icon" aria-hidden="true"></i>
+    <div>
+      <div class="g-pda-label">${p.label}</div>
+      <div class="g-pda-addr">${short}</div>
+    </div>
+    <button class="g-copy-btn" data-addr="${p.addr}">copy</button>
+  `;
+  card.querySelector('button').addEventListener('click', function() {
+    navigator.clipboard.writeText(this.dataset.addr).then(() => {
+      this.textContent = 'copied!';
+      setTimeout(() => this.textContent = 'copy', 1500);
+    });
+  });
+  pdaList.appendChild(card);
+});
+
+// ---- Live CPM bars ----
+const cpmData = Array.from({length: 30}, () => Math.floor(28 + Math.random() * 42));
+const barsContainer = document.getElementById('cpm-bars');
+
+function renderBars() {
+  barsContainer.innerHTML = '';
+  const max = Math.max(...cpmData);
+  cpmData.forEach((v, i) => {
+    const b = document.createElement('div');
+    b.className = 'g-bar' + (i === cpmData.length - 1 ? ' current' : '');
+    b.style.height = Math.round((v / max) * 100) + '%';
+    barsContainer.appendChild(b);
+  });
+  document.getElementById('cpm-val').textContent = cpmData[cpmData.length - 1];
+}
+
+renderBars();
+setInterval(() => {
+  cpmData.shift();
+  cpmData.push(Math.floor(28 + Math.random() * 42));
+  renderBars();
+}, 3000);
+
+// ---- Event feed ----
+let eventCount = 0;
+let seqNum = 40641;
+const feedBody = document.getElementById('event-feed');
+const types = ['decay', 'commit', 'reveal'];
+const typeLabels = { decay: 'DECAY', commit: 'COMMIT', reveal: 'REVEAL' };
+
+function randHex(n) {
+  return Array.from({length: n}, () => Math.floor(Math.random()*16).toString(16)).join('');
+}
+
+function addEvent() {
+  const type = types[Math.floor(Math.random() * 3)];
+  if (type === 'reveal') seqNum++;
+  document.getElementById('seq-val').textContent = seqNum.toLocaleString();
+  document.getElementById('event-count').textContent = (++eventCount) + ' events';
+
+  const now = new Date().toTimeString().slice(0, 8);
+  const div = document.createElement('div');
+  div.className = 'g-event';
+  div.innerHTML = `
+    <span class="g-event-type ${type}">${typeLabels[type]}</span>
+    <span class="g-event-seq">#${seqNum}</span>
+    <span class="g-event-hash">${randHex(20)}...${randHex(4)}</span>
+    <span class="g-event-time">${now}</span>
+  `;
+  feedBody.prepend(div);
+  while (feedBody.children.length > 25) feedBody.removeChild(feedBody.lastChild);
+}
+
+addEvent();
+setInterval(addEvent, 2800);
+
+// ---- Wallet connect sim ----
+let walletConnected = false;
+function toggleWallet() {
+  walletConnected = !walletConnected;
+  document.getElementById('wallet-dot').classList.toggle('connected', walletConnected);
+  document.getElementById('wallet-status').textContent = walletConnected ? 'Connected' : 'Wallet not connected';
+  document.getElementById('wallet-addr').textContent  = walletConnected ? 'HGFisV...iodo' : '';
+  document.getElementById('connect-btn').textContent  = walletConnected ? 'Disconnect' : 'Connect wallet';
+  document.getElementById('update-btn').disabled = !walletConnected;
+  document.getElementById('tx-status').textContent = '';
+}
+
+function simulateUpdate() {
+  const btn = document.getElementById('update-btn');
+  const status = document.getElementById('tx-status');
+  btn.disabled = true;
+  btn.textContent = 'Awaiting signature...';
+  status.textContent = 'Preparing update_config transaction...';
+  setTimeout(() => { btn.textContent = 'Broadcasting...'; status.textContent = 'Sending to mainnet-beta...'; }, 1200);
+  setTimeout(() => {
+    const sig = randHex(32);
+    btn.textContent = 'Sign & submit update_config →';
+    btn.disabled = false;
+    status.innerHTML = `<span style="color:var(--geiger-green)">✓ Confirmed</span> · <span style="color:var(--text-secondary)">sig: ${sig.slice(0,20)}...</span>`;
+  }, 2800);
+}
+
+// ---- Cost estimator ----
+function updateEstimate() {
+  const sleep = parseInt(document.getElementById('sleep-slider').value);
+  const fee   = parseInt(document.getElementById('fee-slider').value);
+  const reqs  = parseInt(document.getElementById('req-slider').value);
+
+  document.getElementById('sleep-display').textContent = sleep + 's';
+  document.getElementById('fee-display').textContent   = fee.toLocaleString();
+  document.getElementById('req-display').textContent   = reqs;
+
+  const cycles = Math.round(86400 / sleep);
+  const txFee  = ((cycles * 5000) / 1e9).toFixed(5);
+  const rev    = ((reqs * fee) / 1e9).toFixed(5);
+
+  document.getElementById('cycles-out').textContent = cycles;
+  document.getElementById('txfee-out').textContent  = txFee;
+  document.getElementById('rev-out').textContent    = rev;
+}
+</script>
+</body>
+</html>
