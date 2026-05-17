@@ -875,7 +875,7 @@ async function fetchAll() {
     const pending=(pendingRes||[]).filter(a=>{try{return decode(a.account.data[0])[104]===0;}catch(e){return false;}});
     const pendingCount=pending.length;
 
-    const balanceXNT=((balRes?.value||0)/1e9).toFixed(2);
+    const balanceXNT=(((balRes?.value ?? balRes) || 0)/1e9).toFixed(2);
 
     // EntropyNode accounts: dataSize=167
     // disc(8)+operator(32)+node_pubkey(32)+name(4+N)+submissions(8)+reputation(1)+active(1)+registered_at(8)+last_submission(8)+bump(1)
@@ -1013,12 +1013,14 @@ async function fetchLiveFeed() {
       const rcp = document.getElementById('rc-per-cycle');
       if(rcp) rcp.textContent = xntPerCycle.toFixed(6) + ' XNT ('+_totalFeeTxs+' txs measured)';
       const rcpr = document.getElementById('rc-projected');
-      if(rcpr) rcpr.textContent = xntPerDaySleep0.toFixed(4) + ' XNT/day @ sleep=0';
-      // Also update cost estimator live section
+      const detSleep = window._detectedSleep !== undefined ? window._detectedSleep : 300;
+      const detCycles = Math.floor(86400 / Math.max(17, detSleep + 17));
+      const xntPerDayDetected = xntPerCycle * detCycles;
+      if(rcpr) rcpr.textContent = xntPerDayDetected.toFixed(4) + ' XNT/day @ ~'+detSleep+'s';
       const lxc = document.getElementById('live-xnt-cycle');
       if(lxc) lxc.textContent = xntPerCycle.toFixed(6) + ' XNT';
       const lxd = document.getElementById('live-xnt-day');
-      if(lxd) lxd.textContent = xntPerDaySleep0.toFixed(4) + ' XNT/day @ sleep=0';
+      if(lxd) lxd.textContent = xntPerDayDetected.toFixed(4) + ' XNT/day @ ~'+detSleep+'s';
     }
 
     // Build feed items with real labels from logs
