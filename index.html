@@ -602,11 +602,7 @@
               <input type="range" min="0" max="3600" step="60" value="3600" id="c-sleep" oninput="updateCost()">
               <div class="val-display" id="c-sleep-val">3600s</div>
             </div>
-            <div class="cost-input">
-              <label>RISE PHOENIX MINTS / DAY</label>
-              <input type="range" min="0" max="500" step="1" value="5" id="c-mints" oninput="updateCost()">
-              <div class="val-display" id="c-mints-val">5 mints</div>
-            </div>
+
             <div class="cost-input">
               <label>XNT PRICE (USD)</label>
               <input type="range" min="0.001" max="1" step="0.001" value="0.01" id="c-price" oninput="updateCost()">
@@ -787,10 +783,10 @@ function showTab(name) {
 
 function updateCost() {
   const sleep=parseInt(document.getElementById('c-sleep').value);
-  const mints=parseInt(document.getElementById('c-mints').value);
+  const mints=0;
   const price=parseFloat(document.getElementById('c-price').value);
   document.getElementById('c-sleep-val').textContent=sleep+'s';
-  document.getElementById('c-mints-val').textContent=mints+' mints';
+
   document.getElementById('c-price-val').textContent='$'+price.toFixed(3);
   const cycleTime=Math.max(17,sleep+17);
   const cyclesPerDay=Math.floor(86400/cycleTime);
