@@ -451,14 +451,13 @@
 
     <div class="section">
       <div class="section-header">
-        <span class="section-title">Current Commitment</span>
+        <span class="section-title">Live activity feed</span>
+        <span class="section-title" id="feed-status">watching...</span>
       </div>
       <div class="section-body">
-        <table class="data-table">
-          <tbody id="commitment-table">
-            <tr><td colspan="3"><span class="loading">loading</span></td></tr>
-          </tbody>
-        </table>
+        <div id="live-feed" class="feed">
+          <div class="feed-item"><span class="feed-time">--:--:--</span><span class="feed-status loading">connecting...</span></div>
+        </div>
       </div>
     </div>
   </div>
