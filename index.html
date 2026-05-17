@@ -370,6 +370,7 @@
     </div>
     <div class="header-right">
       <div class="live-badge"><div class="live-dot"></div>LIVE</div>
+      <div class="last-update" id="xnt-price-display" style="color:var(--green2);font-family:var(--mono);font-size:11px">XNT: loading...</div>
       <div class="last-update" id="last-update">fetching...</div>
     </div>
   </header>
@@ -761,6 +762,32 @@ const ORACLE_STATE = 'BygMTZ1oLBD9tDmssnt9LkNT7BEd2PCJBCzurwtMuTqm';
 const ENTROPY_POOL = 'GDECYXCXietabJs9Y1baKzD3t4VFBw4eZWPnvYenyi77';
 const OPERATOR = 'HGFisVbULNKqogtPuGTfcHG9y6i5nboZabYwifkiiodo';
 const EXPLORER = 'https://explorer.x1.xyz';
+const XNT_VAULT_XNT  = '8wvV4HKBDFMLEUkVWp1WPNa5ano99XCm3f9t3troyLb';
+const XNT_VAULT_USDC = '7iw2adw8Af7x3pY7gj5RwczFXuGjCoX92Gfy3avwXQtg';
+let _xntUsdPrice = null;
+
+async function fetchXntPrice() {
+  try {
+    const [xntRes, usdcRes] = await Promise.all([
+      rpc('getTokenAccountBalance',[XNT_VAULT_XNT]),
+      rpc('getTokenAccountBalance',[XNT_VAULT_USDC])
+    ]);
+    const xnt  = Number(xntRes?.value?.uiAmount || 0);
+    const usdc = Number(usdcRes?.value?.uiAmount || 0);
+    if (xnt && usdc) {
+      _xntUsdPrice = usdc / xnt;
+      const el = document.getElementById('xnt-price-display');
+      if (el) el.textContent = '1 XNT = $' + _xntUsdPrice.toFixed(4);
+      const slider = document.getElementById('c-price');
+      const label  = document.getElementById('c-price-val');
+      if (slider && label) {
+        slider.value = Math.min(_xntUsdPrice, 1).toFixed(3);
+        label.textContent = '$' + _xntUsdPrice.toFixed(4);
+        updateCost();
+      }
+    }
+  } catch(e) {}
+}
 const ONLINE_THRESHOLD = 3600;
 
 async function rpc(method, params) {
@@ -1026,7 +1053,9 @@ fetchAll();
 updateCost();
 setInterval(fetchAll,30000);
 fetchLiveFeed();
+fetchXntPrice();
 setInterval(fetchLiveFeed,15000);
+setInterval(fetchXntPrice,60000);
 </script>
 </body>
 </html>
