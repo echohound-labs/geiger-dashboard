@@ -758,170 +758,198 @@
 
 </div>
 
-<script type="module">
-import { Program, AnchorProvider, web3 } from 'https://esm.sh/@coral-xyz/anchor@0.30.1';
-
+<script>
 const RPC = '/api/rpc';
-const PROGRAM_ID = new web3.PublicKey('BxUNg2yo5371BQMZPkfcxdCptFRDHkhvEXNM1QNPBRYU');
-const ORACLE_STATE = new web3.PublicKey('BygMTZ1oLBD9tDmssnt9LkNT7BEd2PCJBCzurwtMuTqm');
-const ENTROPY_POOL = new web3.PublicKey('GDECYXCXietabJs9Y1baKzD3t4VFBw4eZWPnvYenyi77');
+const PROGRAM_ID = 'BxUNg2yo5371BQMZPkfcxdCptFRDHkhvEXNM1QNPBRYU';
+const ORACLE_STATE = 'BygMTZ1oLBD9tDmssnt9LkNT7BEd2PCJBCzurwtMuTqm';
+const ENTROPY_POOL = 'GDECYXCXietabJs9Y1baKzD3t4VFBw4eZWPnvYenyi77';
 const OPERATOR = 'HGFisVbULNKqogtPuGTfcHG9y6i5nboZabYwifkiiodo';
 const EXPLORER = 'https://explorer.x1.xyz';
+const ONLINE_THRESHOLD = 3600;
 
-// Load IDL and set up Anchor program
-const idl = await fetch('/idl.json').then(r => r.json());
-const connection = new web3.Connection(RPC, 'confirmed');
+async function rpc(method, params) {
+  const r = await fetch(RPC, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method,params})});
+  const d = await r.json();
+  if (d.error) throw new Error(d.error.message);
+  return d.result;
+}
 
-// Dummy wallet for read-only
-const dummyWallet = { publicKey: web3.PublicKey.default, signTransaction: async t => t, signAllTransactions: async t => t };
-const provider = new AnchorProvider(connection, dummyWallet, { commitment: 'confirmed' });
-const program = new Program(idl, provider);
-
+function u64(buf, off) { let v=0n; for(let i=0;i<8;i++) v|=BigInt(buf[off+i])<<BigInt(8*i); return Number(v); }
+function toHex(buf,s,l) { return Array.from(buf.slice(s,s+l)).map(b=>b.toString(16).padStart(2,'0')).join(''); }
 function fmt(n) { return Number(n).toLocaleString(); }
+function decode(b64) { return Uint8Array.from(atob(b64),c=>c.charCodeAt(0)); }
 
-async function fetchAll() {
-  try {
-    document.getElementById('last-update').textContent = 'fetching...';
+function showTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  event.target.classList.add('active');
+}
 
-    // Use Anchor to deserialize — no byte counting!
-    const [oracle, pool, balance, pendingAccounts] = await Promise.all([
-      program.account.oracleState.fetch(ORACLE_STATE),
-      program.account.entropyPool.fetch(ENTROPY_POOL),
-      connection.getBalance(new web3.PublicKey(OPERATOR)),
-      program.account.randomnessRequest.all([
-        { memcmp: { offset: 104, bytes: '1' } }
-      ])
-    ]);
-
-    // Filter pending (status=0)
-    const pending = pendingAccounts.filter(a => a.account.status && a.account.status.pending !== undefined || JSON.stringify(a.account.status) === '{"pending":{}}');
-    const pendingCount = pending.length;
-
-    const totalRequests = Number(oracle.totalRequests);
-    const totalFulfilled = Number(oracle.totalFulfillments);
-    const totalNodes = Number(oracle.totalNodes);
-    const head = Number(pool.head);
-    const totalSubmissions = Number(pool.totalSubmissions);
-    const balanceXNT = (balance / 1e9).toFixed(2);
-
-    // Overview stats
-    document.getElementById('stat-seq').textContent = fmt(totalRequests);
-    document.getElementById('stat-seq-sub').textContent = 'total randomness requests';
-    document.getElementById('stat-pool').textContent = '32';
-    document.getElementById('stat-pending').textContent = pendingCount;
-    document.getElementById('stat-pending-sub').textContent = pendingCount === 0 ? 'queue empty' : 'awaiting fulfillment';
-    document.getElementById('stat-head').textContent = head % 32;
-    document.getElementById('stat-balance').textContent = balanceXNT;
-
-    // Oracle state table
-    document.getElementById('tbl-seq').textContent = fmt(totalRequests);
-    document.getElementById('tbl-head').textContent = head % 32;
-    document.getElementById('tbl-fulfilled').textContent = fmt(totalFulfilled);
-
-    // Pool visualization
-    const seeds = pool.seeds;
-    const filledSeeds = seeds.filter(s => !s.every(b => b === 0)).length;
-    const pct = Math.round((filledSeeds / 32) * 100);
-    document.getElementById('pool-fill').style.width = pct + '%';
-    document.getElementById('pool-fill-pct').textContent = filledSeeds + '/32 seeds';
-    updateSlotsGrid(head, seeds);
-
-    // Pool seeds display
-    const seedsHtml = seeds.slice(0, 8).map((s, i) => {
-      const isEmpty = s.every(b => b === 0);
-      const isLatest = i === (head % 32);
-      const color = isEmpty ? 'var(--text3)' : isLatest ? 'var(--green)' : 'var(--text2)';
-      const seedHex = Array.from(s).map(b => b.toString(16).padStart(2,'0')).join('');
-      return `<div style="color:${color};padding:3px 0;border-bottom:1px solid var(--border)">[${String(i).padStart(2,'0')}] ${isEmpty ? '(empty)' : seedHex.slice(0,32)+'...'} ${isLatest ? '← latest' : ''}</div>`;
-    }).join('');
-    document.getElementById('pool-seeds').innerHTML = seedsHtml;
-
-    // Requests tab
-    document.getElementById('req-pending').textContent = pendingCount;
-    document.getElementById('req-fulfilled').textContent = fmt(totalFulfilled);
-
-    // Pending list
-    const pendingHtml = pendingCount === 0
-      ? '<div style="font-family:var(--mono);font-size:12px;color:var(--text3);padding:8px 0">No pending requests · pool is idle</div>'
-      : pending.map(p => `<div class="pending-item"><span class="pending-addr">${p.publicKey.toString().slice(0,20)}...${p.publicKey.toString().slice(-8)}</span><a class="tx-link" href="${EXPLORER}/address/${p.publicKey.toString()}" target="_blank">view ↗</a></div>`).join('');
-    document.getElementById('pending-requests-list').innerHTML = pendingHtml;
-
-    // Auto-tune
-    updateAutoTune(pendingCount);
-
-    // ENTROPY tab
-    document.getElementById('entropy-cycles').textContent = fmt(totalSubmissions);
-    document.getElementById('entropy-fulfilled').textContent = fmt(totalFulfilled);
-
-    document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
-
-  } catch(e) {
-    console.error(e);
-    document.getElementById('last-update').textContent = 'error: ' + e.message;
-  }
+function updateCost() {
+  const sleep=parseInt(document.getElementById('c-sleep').value);
+  const mints=parseInt(document.getElementById('c-mints').value);
+  const price=parseFloat(document.getElementById('c-price').value);
+  document.getElementById('c-sleep-val').textContent=sleep+'s';
+  document.getElementById('c-mints-val').textContent=mints+' mints';
+  document.getElementById('c-price-val').textContent='$'+price.toFixed(3);
+  const cycleTime=Math.max(17,sleep+17);
+  const cyclesPerDay=Math.floor(86400/cycleTime);
+  const xntPerDay=cyclesPerDay*0.00347;
+  const usdPerDay=xntPerDay*price;
+  const refreshMins=Math.round((32*cycleTime)/60);
+  document.getElementById('r-cycles').textContent=fmt(cyclesPerDay);
+  document.getElementById('r-xnt').textContent=xntPerDay.toFixed(2)+' XNT';
+  document.getElementById('r-usd').textContent='$'+usdPerDay.toFixed(4);
+  document.getElementById('r-usdmo').textContent='$'+(usdPerDay*30).toFixed(3);
+  document.getElementById('r-refresh').textContent=refreshMins<60?refreshMins+' min':(refreshMins/60).toFixed(1)+' hr';
 }
 
 function updateSlotsGrid(head, seeds) {
-  const grid = document.getElementById('slots-grid');
-  grid.innerHTML = '';
-  const headIdx = Number(head) % 32;
-  for (let i = 0; i < 32; i++) {
-    const cell = document.createElement('div');
-    cell.className = 'slot-cell';
-    const isEmpty = seeds[i].every(b => b === 0);
-    if (!isEmpty) cell.classList.add('filled');
-    if (i === headIdx) cell.classList.add('latest');
-    cell.title = `Slot ${i}`;
+  const grid=document.getElementById('slots-grid');
+  if(!grid) return;
+  grid.innerHTML='';
+  for(let i=0;i<32;i++) {
+    const cell=document.createElement('div');
+    cell.className='slot-cell';
+    if(seeds[i]) cell.classList.add('filled');
+    if(i===head%32) cell.classList.add('latest');
     grid.appendChild(cell);
   }
 }
 
-function updateAutoTune(pending) {
-  let rec = '3600s (idle)';
-  if (pending > 20) rec = '0s (max speed)';
-  else if (pending > 5) rec = '60s (busy)';
-  else if (pending > 0) rec = '300s (low demand)';
-  document.getElementById('autotune-pending').textContent = pending;
-  document.getElementById('autotune-recommended').textContent = rec;
+async function fetchAll() {
+  try {
+    document.getElementById('last-update').textContent='fetching...';
+
+    const [oracleRes,poolRes,pendingRes,balRes,nodesRes] = await Promise.all([
+      rpc('getAccountInfo',[ORACLE_STATE,{encoding:'base64'}]),
+      rpc('getAccountInfo',[ENTROPY_POOL,{encoding:'base64'}]),
+      rpc('getProgramAccounts',[PROGRAM_ID,{filters:[{dataSize:122}],encoding:'base64'}]),
+      rpc('getBalance',[OPERATOR]),
+      rpc('getProgramAccounts',[PROGRAM_ID,{filters:[{dataSize:167}],encoding:'base64'}])
+    ]);
+
+    // OracleState: disc(8)+authority(32)+total_nodes(8)+total_requests(8)+total_fulfillments(8)+paused(1)+bump(1)
+    const oraw=decode(oracleRes.value.data[0]);
+    const totalNodes=u64(oraw,40);
+    const totalRequests=u64(oraw,48);
+    const totalFulfillments=u64(oraw,56);
+    const paused=oraw[64]===1;
+
+    // EntropyPool: disc(8)+seeds(1024)+head(8)+total_submissions(8)+bump(1)
+    const praw=decode(poolRes.value.data[0]);
+    const seeds=[];
+    for(let i=0;i<32;i++) seeds.push(!praw.slice(8+i*32,8+i*32+32).every(b=>b===0));
+    const head=u64(praw,1032);
+    const totalSubmissions=u64(praw,1040);
+
+    // Pending requests: dataSize=122, status byte at offset 104 = 0
+    const pending=(pendingRes||[]).filter(a=>{try{return decode(a.account.data[0])[104]===0;}catch(e){return false;}});
+    const pendingCount=pending.length;
+
+    const balanceXNT=((balRes?.value||0)/1e9).toFixed(2);
+
+    // EntropyNode accounts: dataSize=167
+    // disc(8)+operator(32)+node_pubkey(32)+name(4+N)+submissions(8)+reputation(1)+active(1)+registered_at(8)+last_submission(8)+bump(1)
+    const nowSec=Math.floor(Date.now()/1000);
+    const allNodes=(nodesRes||[]).map(a=>{
+      try {
+        const d=decode(a.account.data[0]);
+        const nameLen=d[72]|(d[73]<<8)|(d[74]<<16)|(d[75]<<24);
+        const base=76+nameLen;
+        let subs=0n; for(let i=0;i<8;i++) subs|=BigInt(d[base+i])<<BigInt(8*i);
+        const reputation=d[base+8];
+        const activeFlag=d[base+9]===1;
+        let lastSub=0n; for(let i=0;i<8;i++) lastSub|=BigInt(d[base+18+i])<<BigInt(8*i);
+        const secsAgo=nowSec-Number(lastSub);
+        const online=secsAgo<ONLINE_THRESHOLD;
+        return {pubkey:a.pubkey,submissions:Number(subs),reputation,active:activeFlag,secsAgo,online};
+      } catch(e){return null;}
+    }).filter(Boolean).sort((a,b)=>b.submissions-a.submissions);
+
+    const onlineCount=allNodes.filter(n=>n.online).length;
+
+    // Overview stats
+    document.getElementById('stat-seq').textContent=fmt(totalRequests);
+    document.getElementById('stat-fulfilled').textContent=fmt(totalFulfillments);
+    document.getElementById('stat-pending').textContent=pendingCount;
+    document.getElementById('stat-pending-sub').textContent=pendingCount===0?'queue empty':'awaiting fulfillment';
+    document.getElementById('stat-submissions').textContent=fmt(totalSubmissions);
+    const sn=document.getElementById('stat-nodes');
+    if(sn){sn.textContent=onlineCount+' online / '+allNodes.length+' registered';sn.style.color=onlineCount>0?'var(--green)':'var(--red)';}
+    document.getElementById('stat-head').textContent=head%32;
+    document.getElementById('stat-balance').textContent=balanceXNT;
+    const sp=document.getElementById('stat-paused');
+    if(sp){sp.textContent=paused?'PAUSED':'ACTIVE';sp.style.color=paused?'var(--red)':'var(--green)';}
+
+    // Table
+    const tn=document.getElementById('tbl-nodes'); if(tn) tn.textContent=onlineCount+' online / '+allNodes.length+' registered';
+    const ts=document.getElementById('tbl-seq'); if(ts) ts.textContent=fmt(totalRequests);
+    const tf=document.getElementById('tbl-fulfilled'); if(tf) tf.textContent=fmt(totalFulfillments);
+    const th=document.getElementById('tbl-head'); if(th) th.textContent=head%32;
+    const tsb=document.getElementById('tbl-submissions'); if(tsb) tsb.textContent=fmt(totalSubmissions);
+    const tp=document.getElementById('tbl-paused'); if(tp) tp.textContent=paused?'true':'false';
+
+    // Nodes list
+    const nodesEl=document.getElementById('nodes-list');
+    if(nodesEl){
+      nodesEl.innerHTML=allNodes.map(n=>{
+        const ago=n.secsAgo<3600?Math.round(n.secsAgo/60)+' min ago':n.secsAgo<86400?Math.round(n.secsAgo/3600)+' hrs ago':Math.round(n.secsAgo/86400)+' days ago';
+        const col=n.online?'var(--green)':'var(--red)';
+        const status=n.online?'● ONLINE':'○ OFFLINE';
+        return '<tr><td><span style="color:'+col+';font-family:var(--mono);font-size:11px">'+status+'</span></td><td class="val">'+n.pubkey.slice(0,16)+'...</td><td class="val">'+fmt(n.submissions)+'</td><td style="color:var(--text3)">'+ago+'</td><td style="color:var(--text3)">'+n.reputation+'/100</td></tr>';
+      }).join('');
+    }
+
+    // Pool
+    const filledCount=seeds.filter(Boolean).length;
+    const poolFill=document.getElementById('pool-fill'); if(poolFill) poolFill.style.width=Math.round(filledCount/32*100)+'%';
+    const poolPct=document.getElementById('pool-fill-pct'); if(poolPct) poolPct.textContent=filledCount+'/32 seeds';
+    updateSlotsGrid(head,seeds);
+    const poolSeedsEl=document.getElementById('pool-seeds');
+    if(poolSeedsEl){
+      poolSeedsEl.innerHTML=Array.from({length:8},(_,i)=>{
+        const filled=seeds[i];
+        const isLatest=i===head%32;
+        const color=!filled?'var(--text3)':isLatest?'var(--green)':'var(--text2)';
+        const seedHex=toHex(praw,8+i*32,16);
+        return '<div style="color:'+color+';padding:3px 0;border-bottom:1px solid var(--border)">['+String(i).padStart(2,'0')+'] '+(filled?seedHex+'...':'(empty)')+' '+(isLatest?'← latest':'')+'</div>';
+      }).join('');
+    }
+
+    // Requests tab
+    const rp=document.getElementById('req-pending'); if(rp) rp.textContent=pendingCount;
+    const rf=document.getElementById('req-fulfilled'); if(rf) rf.textContent=fmt(totalFulfillments);
+    const pl=document.getElementById('pending-requests-list');
+    if(pl){
+      pl.innerHTML=pendingCount===0
+        ?'<div style="font-family:var(--mono);font-size:12px;color:var(--text3);padding:8px 0">No pending requests — pool is idle</div>'
+        :pending.map(p=>'<div class="pending-item"><span class="pending-addr">'+p.pubkey.slice(0,20)+'...'+p.pubkey.slice(-8)+'</span><a class="tx-link" href="'+EXPLORER+'/address/'+p.pubkey+'" target="_blank">view ↗</a></div>').join('');
+    }
+
+    // Auto-tune
+    let rec='3600s (idle)';
+    if(pendingCount>20) rec='0s (max speed)';
+    else if(pendingCount>5) rec='60s (busy)';
+    else if(pendingCount>0) rec='300s (low demand)';
+    const atp=document.getElementById('autotune-pending'); if(atp) atp.textContent=pendingCount;
+    const atr=document.getElementById('autotune-recommended'); if(atr) atr.textContent=rec;
+
+    // ENTROPY tab
+    const ec=document.getElementById('entropy-cycles'); if(ec) ec.textContent=fmt(totalSubmissions);
+    const ef=document.getElementById('entropy-fulfilled'); if(ef) ef.textContent=fmt(totalFulfillments);
+
+    document.getElementById('last-update').textContent=new Date().toLocaleTimeString();
+  } catch(e) {
+    console.error('fetchAll error:',e);
+    document.getElementById('last-update').textContent='error: '+e.message;
+  }
 }
-
-function showTab(name) {
-  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
-  document.getElementById('tab-' + name).classList.add('active');
-  event.target.classList.add('active');
-}
-window.showTab = showTab;
-
-function updateCost() {
-  const sleep = parseInt(document.getElementById('c-sleep').value);
-  const mints = parseInt(document.getElementById('c-mints').value);
-  const price = parseFloat(document.getElementById('c-price').value);
-
-  document.getElementById('c-sleep-val').textContent = sleep + 's';
-  document.getElementById('c-mints-val').textContent = mints + ' mints';
-  document.getElementById('c-price-val').textContent = '$' + price.toFixed(3);
-
-  const cycleFloor = 17;
-  const cycleTime = Math.max(cycleFloor, sleep + cycleFloor);
-  const cyclesPerDay = Math.floor(86400 / cycleTime);
-  // At 300s sleep ~288 cycles/day = ~1 XNT/day → ~0.00347 XNT per cycle
-  const xntPerDay = cyclesPerDay * 0.00347;
-  const usdPerDay = xntPerDay * price;
-  const refreshMins = Math.round((32 * cycleTime) / 60);
-
-  document.getElementById('r-cycles').textContent = fmt(cyclesPerDay);
-  document.getElementById('r-xnt').textContent = xntPerDay.toFixed(2) + ' XNT';
-  document.getElementById('r-usd').textContent = '$' + usdPerDay.toFixed(4);
-  document.getElementById('r-usdmo').textContent = '$' + (usdPerDay * 30).toFixed(3);
-  document.getElementById('r-refresh').textContent = refreshMins < 60 ? refreshMins + ' min' : (refreshMins/60).toFixed(1) + ' hr';
-}
-window.updateCost = updateCost;
-window.fetchAll = fetchAll;
 
 fetchAll();
 updateCost();
-setInterval(fetchAll, 30000);
+setInterval(fetchAll,30000);
 </script>
 </body>
 </html>
