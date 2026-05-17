@@ -629,10 +629,11 @@
           <div class="section-header"><span class="section-title">Current (live)</span></div>
           <div class="section-body">
             <div class="cost-result">
-              <div class="cost-result-row"><span class="k">sleep</span><span class="v">3600s</span></div>
-              <div class="cost-result-row"><span class="k">cycles/day</span><span class="v">~24</span></div>
-              <div class="cost-result-row"><span class="k">XNT/day</span><span class="v">~0.7</span></div>
-              <div class="cost-result-row"><span class="k">mode</span><span class="v">IDLE · low demand</span></div>
+              <div class="cost-result-row"><span class="k">sleep</span><span class="v" id="live-sleep">0s (running)</span></div>
+              <div class="cost-result-row"><span class="k">cycles/day</span><span class="v" id="live-cycles-day">calculating...</span></div>
+              <div class="cost-result-row"><span class="k">XNT/cycle (measured)</span><span class="v" id="live-xnt-cycle">measuring...</span></div>
+              <div class="cost-result-row"><span class="k">XNT/day (measured)</span><span class="v" id="live-xnt-day">measuring...</span></div>
+              <div class="cost-result-row"><span class="k">balance</span><span class="v" id="live-bal">loading...</span></div>
             </div>
           </div>
         </div>
@@ -943,9 +944,39 @@ async function fetchAll() {
   }
 }
 
+// Live feed
+let _seenSigs = new Set();
+async function fetchLiveFeed() {
+  try {
+    const result = await rpc('getSignaturesForAddress',[OPERATOR,{limit:10,commitment:'confirmed'}]);
+    if (!result) return;
+    const feed = document.getElementById('live-feed');
+    if (!feed) return;
+    const newTxs = result.filter(tx => !_seenSigs.has(tx.signature));
+    if (newTxs.length === 0) return;
+    newTxs.forEach(tx => _seenSigs.add(tx.signature));
+    newTxs.forEach(tx => {
+      const t = tx.blockTime ? new Date(tx.blockTime*1000).toLocaleTimeString() : '--:--';
+      const err = tx.err ? ' ❌' : '';
+      const div = document.createElement('div');
+      div.className = 'feed-item';
+      div.innerHTML = '<span class="feed-time">'+t+'</span><span class="feed-status'+(tx.err?' error':'')+'">cycle tx'+err+'</span><a class="tx-link" href="'+EXPLORER+'/tx/'+tx.signature+'" target="_blank">'+tx.signature.slice(0,20)+'... ↗</a>';
+      feed.insertBefore(div, feed.firstChild);
+    });
+    while(feed.children.length > 30) feed.removeChild(feed.lastChild);
+    const fs = document.getElementById('feed-status');
+    if(fs) fs.textContent = _seenSigs.size + ' txs seen';
+  } catch(e) {
+    const fs = document.getElementById('feed-status');
+    if(fs) fs.textContent = 'feed error: '+e.message;
+  }
+}
+
 fetchAll();
 updateCost();
 setInterval(fetchAll,30000);
+fetchLiveFeed();
+setInterval(fetchLiveFeed,15000);
 </script>
 </body>
 </html>
