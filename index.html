@@ -823,13 +823,14 @@ async function fetchAll() {
     document.getElementById('last-update').textContent='fetching...';
 
     const [oracleRes,poolRes,pendingRes,balRes,nodesRes] = await Promise.all([
-      rpc('getAccountInfo',[ORACLE_STATE,{encoding:'base64'}]),
-      rpc('getAccountInfo',[ENTROPY_POOL,{encoding:'base64'}]),
-      rpc('getProgramAccounts',[PROGRAM_ID,{filters:[{dataSize:122}],encoding:'base64'}]),
-      rpc('getBalance',[OPERATOR]),
-      rpc('getProgramAccounts',[PROGRAM_ID,{filters:[{dataSize:167}],encoding:'base64'}])
+      rpc('getAccountInfo',[ORACLE_STATE,{encoding:'base64'}]).catch(e=>null),
+      rpc('getAccountInfo',[ENTROPY_POOL,{encoding:'base64'}]).catch(e=>null),
+      rpc('getProgramAccounts',[PROGRAM_ID,{filters:[{dataSize:122}],encoding:'base64'}]).catch(e=>null),
+      rpc('getBalance',[OPERATOR]).catch(e=>null),
+      rpc('getProgramAccounts',[PROGRAM_ID,{filters:[{dataSize:167}],encoding:'base64'}]).catch(e=>null)
     ]);
 
+    if (!oracleRes?.value) throw new Error('oracle state not found');
     // OracleState: disc(8)+authority(32)+total_nodes(8)+total_requests(8)+total_fulfillments(8)+paused(1)+bump(1)
     const oraw=decode(oracleRes.value.data[0]);
     const totalNodes=u64(oraw,40);
@@ -838,11 +839,11 @@ async function fetchAll() {
     const paused=oraw[64]===1;
 
     // EntropyPool: disc(8)+seeds(1024)+head(8)+total_submissions(8)+bump(1)
-    const praw=decode(poolRes.value.data[0]);
+    const praw = poolRes?.value ? decode(poolRes.value.data[0]) : null;
     const seeds=[];
-    for(let i=0;i<32;i++) seeds.push(!praw.slice(8+i*32,8+i*32+32).every(b=>b===0));
-    const head=u64(praw,1032);
-    const totalSubmissions=u64(praw,1040);
+    if(praw) { for(let i=0;i<32;i++) seeds.push(!praw.slice(8+i*32,8+i*32+32).every(b=>b===0)); }
+    const head = praw ? u64(praw,1032) : 0;
+    const totalSubmissions = praw ? u64(praw,1040) : 0;
 
     // Pending requests: dataSize=122, status byte at offset 104 = 0
     const pending=(pendingRes||[]).filter(a=>{try{return decode(a.account.data[0])[104]===0;}catch(e){return false;}});
