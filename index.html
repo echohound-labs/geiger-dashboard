@@ -791,7 +791,7 @@ function updateCost() {
   document.getElementById('c-price-val').textContent='$'+price.toFixed(3);
   const cycleTime=Math.max(17,sleep+17);
   const cyclesPerDay=Math.floor(86400/cycleTime);
-  const xntPerDay=cyclesPerDay*0.00347;
+  const xntPerDay=cyclesPerDay*0.0063;
   const usdPerDay=xntPerDay*price;
   const refreshMins=Math.round((32*cycleTime)/60);
   document.getElementById('r-cycles').textContent=fmt(cyclesPerDay);
@@ -960,7 +960,9 @@ async function fetchLiveFeed() {
       const err = tx.err ? ' ❌' : '';
       const div = document.createElement('div');
       div.className = 'feed-item';
-      div.innerHTML = '<span class="feed-time">'+t+'</span><span class="feed-status'+(tx.err?' error':'')+'">cycle tx'+err+'</span><a class="tx-link" href="'+EXPLORER+'/tx/'+tx.signature+'" target="_blank">'+tx.signature.slice(0,20)+'... ↗</a>';
+      const labels=['🔒 Commit','👁 Reveal','✅ Finalize'];
+      const lbl=labels[(_seenSigs.size-1)%3];
+      div.innerHTML = '<span class="feed-time">'+t+'</span><span class="feed-status'+(tx.err?' error':'')+'">'+lbl+err+'</span><a class="tx-link" href="'+EXPLORER+'/tx/'+tx.signature+'" target="_blank">'+tx.signature.slice(0,20)+'... ↗</a>';
       feed.insertBefore(div, feed.firstChild);
     });
     while(feed.children.length > 30) feed.removeChild(feed.lastChild);
