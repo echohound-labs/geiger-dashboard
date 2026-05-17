@@ -388,7 +388,7 @@
   <div class="tab-panel active" id="tab-overview">
     <div class="stats-grid">
       <div class="stat-card">
-        <div class="stat-label">Sequence</div>
+        <div class="stat-label">Total Requests</div>
         <div class="stat-value" id="stat-seq"><span class="loading">loading</span></div>
         <div class="stat-sub" id="stat-seq-sub">commit-reveal cycles</div>
       </div>
@@ -441,9 +441,9 @@
             <tr><td>entropy_pool</td><td class="val">GDECYXCXietabJs9Y1baKzD3t4VFBw4eZWPnvYenyi77</td><td></td></tr>
             <tr><td>program_id</td><td class="val">BxUNg2yo5371BQMZPkfcxdCptFRDHkhvEXNM1QNPBRYU</td><td></td></tr>
             <tr><td>operator</td><td class="val">HGFisVbULNKqogtPuGTfcHG9y6i5nboZabYwifkiiodo</td><td></td></tr>
-            <tr><td>sequence</td><td class="val" id="tbl-seq">—</td><td>latest cycle</td></tr>
+            <tr><td>total_requests</td><td class="val" id="tbl-seq">—</td><td>randomness requests</td></tr>
             <tr><td>pool_head</td><td class="val" id="tbl-head">—</td><td>current write index</td></tr>
-            <tr><td>total_fulfilled</td><td class="val" id="tbl-fulfilled">—</td><td>randomness fulfilled</td></tr>
+            <tr><td>total_fulfillments</td><td class="val" id="tbl-fulfilled">—</td><td>randomness fulfilled</td></tr>
           </tbody>
         </table>
       </div>
@@ -758,110 +758,107 @@
 
 </div>
 
-<script>
+<script type="module">
+import { Program, AnchorProvider, web3 } from 'https://esm.sh/@coral-xyz/anchor@0.30.1';
+
 const RPC = '/api/rpc';
-const PROGRAM_ID = 'BxUNg2yo5371BQMZPkfcxdCptFRDHkhvEXNM1QNPBRYU';
-const ORACLE_STATE = 'BygMTZ1oLBD9tDmssnt9LkNT7BEd2PCJBCzurwtMuTqm';
-const ENTROPY_POOL = 'GDECYXCXietabJs9Y1baKzD3t4VFBw4eZWPnvYenyi77';
+const PROGRAM_ID = new web3.PublicKey('BxUNg2yo5371BQMZPkfcxdCptFRDHkhvEXNM1QNPBRYU');
+const ORACLE_STATE = new web3.PublicKey('BygMTZ1oLBD9tDmssnt9LkNT7BEd2PCJBCzurwtMuTqm');
+const ENTROPY_POOL = new web3.PublicKey('GDECYXCXietabJs9Y1baKzD3t4VFBw4eZWPnvYenyi77');
 const OPERATOR = 'HGFisVbULNKqogtPuGTfcHG9y6i5nboZabYwifkiiodo';
 const EXPLORER = 'https://explorer.x1.xyz';
-const RANDOMNESS_REQUEST_SIZE = 122;
 
-async function rpc(method, params) {
-  const r = await fetch(RPC, {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({jsonrpc:'2.0',id:1,method,params})
-  });
-  const d = await r.json();
-  if (d.error) throw new Error(d.error.message);
-  return d.result;
-}
+// Load IDL and set up Anchor program
+const idl = await fetch('/idl.json').then(r => r.json());
+const connection = new web3.Connection(RPC, 'confirmed');
 
-function b58decode(s) {
-  const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-  let d = BigInt(0);
-  for (const c of s) {
-    d = d * 58n + BigInt(ALPHABET.indexOf(c));
-  }
-  const bytes = [];
-  while (d > 0n) { bytes.unshift(Number(d & 0xffn)); d >>= 8n; }
-  for (const c of s) { if (c === '1') bytes.unshift(0); else break; }
-  return new Uint8Array(bytes);
-}
-
-function readU64LE(buf, offset) {
-  let val = 0n;
-  for (let i = 0; i < 8; i++) val |= BigInt(buf[offset + i]) << BigInt(8 * i);
-  return val;
-}
-
-function readU32LE(buf, offset) {
-  return buf[offset] | (buf[offset+1]<<8) | (buf[offset+2]<<16) | (buf[offset+3]<<24);
-}
-
-function hex(buf, start, len) {
-  return Array.from(buf.slice(start, start+len)).map(b=>b.toString(16).padStart(2,'0')).join('');
-}
+// Dummy wallet for read-only
+const dummyWallet = { publicKey: web3.PublicKey.default, signTransaction: async t => t, signAllTransactions: async t => t };
+const provider = new AnchorProvider(connection, dummyWallet, { commitment: 'confirmed' });
+const program = new Program(idl, provider);
 
 function fmt(n) { return Number(n).toLocaleString(); }
 
-async function fetchOracleState() {
-  const result = await rpc('getAccountInfo', [ORACLE_STATE, {encoding:'base64'}]);
-  if (!result?.value) throw new Error('oracle state not found');
-  const raw = Uint8Array.from(atob(result.value.data[0]), c => c.charCodeAt(0));
-  // Skip 8-byte discriminator
-  // OracleState layout: sequence(u64), total_fulfilled(u64), bump(u8)
-  const sequence = readU64LE(raw, 8);
-  const totalFulfilled = readU64LE(raw, 16);
-  return { sequence, totalFulfilled };
-}
-
-async function fetchPoolState() {
-  const result = await rpc('getAccountInfo', [ENTROPY_POOL, {encoding:'base64'}]);
-  if (!result?.value) throw new Error('pool not found');
-  const raw = Uint8Array.from(atob(result.value.data[0]), c => c.charCodeAt(0));
-  // EntropyPool layout: 8 disc + head(u64) + seeds([u8;32][32])
-  const head = readU64LE(raw, 8);
-  const seeds = [];
-  for (let i = 0; i < 32; i++) {
-    const offset = 16 + i * 32;
-    const seed = hex(raw, offset, 32);
-    seeds.push(seed);
-  }
-  return { head, seeds };
-}
-
-async function fetchPendingRequests() {
-  const result = await rpc('getProgramAccounts', [PROGRAM_ID, {
-    filters: [{dataSize: RANDOMNESS_REQUEST_SIZE}],
-    encoding: 'base64'
-  }]);
-  return result || [];
-}
-
-async function fetchCommitment() {
-  // PDA: seeds = [b"commitment", operator_pubkey]
-  // We read all program accounts and find the commitment
+async function fetchAll() {
   try {
-    const result = await rpc('getProgramAccounts', [PROGRAM_ID, {
-      filters: [{dataSize: 89}], // PendingCommitment size approx
-      encoding: 'base64'
-    }]);
-    return result || [];
-  } catch(e) { return []; }
-}
+    document.getElementById('last-update').textContent = 'fetching...';
 
-async function fetchBalance() {
-  const result = await rpc('getBalance', [OPERATOR]);
-  return result?.value || 0;
-}
+    // Use Anchor to deserialize — no byte counting!
+    const [oracle, pool, balance, pendingAccounts] = await Promise.all([
+      program.account.oracleState.fetch(ORACLE_STATE),
+      program.account.entropyPool.fetch(ENTROPY_POOL),
+      connection.getBalance(new web3.PublicKey(OPERATOR)),
+      program.account.randomnessRequest.all([
+        { memcmp: { offset: 104, bytes: '1' } }
+      ])
+    ]);
 
-function showTab(name) {
-  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
-  document.getElementById('tab-' + name).classList.add('active');
-  event.target.classList.add('active');
+    // Filter pending (status=0)
+    const pending = pendingAccounts.filter(a => a.account.status && a.account.status.pending !== undefined || JSON.stringify(a.account.status) === '{"pending":{}}');
+    const pendingCount = pending.length;
+
+    const totalRequests = Number(oracle.totalRequests);
+    const totalFulfilled = Number(oracle.totalFulfillments);
+    const totalNodes = Number(oracle.totalNodes);
+    const head = Number(pool.head);
+    const totalSubmissions = Number(pool.totalSubmissions);
+    const balanceXNT = (balance / 1e9).toFixed(2);
+
+    // Overview stats
+    document.getElementById('stat-seq').textContent = fmt(totalRequests);
+    document.getElementById('stat-seq-sub').textContent = 'total randomness requests';
+    document.getElementById('stat-pool').textContent = '32';
+    document.getElementById('stat-pending').textContent = pendingCount;
+    document.getElementById('stat-pending-sub').textContent = pendingCount === 0 ? 'queue empty' : 'awaiting fulfillment';
+    document.getElementById('stat-head').textContent = head % 32;
+    document.getElementById('stat-balance').textContent = balanceXNT;
+
+    // Oracle state table
+    document.getElementById('tbl-seq').textContent = fmt(totalRequests);
+    document.getElementById('tbl-head').textContent = head % 32;
+    document.getElementById('tbl-fulfilled').textContent = fmt(totalFulfilled);
+
+    // Pool visualization
+    const seeds = pool.seeds;
+    const filledSeeds = seeds.filter(s => !s.every(b => b === 0)).length;
+    const pct = Math.round((filledSeeds / 32) * 100);
+    document.getElementById('pool-fill').style.width = pct + '%';
+    document.getElementById('pool-fill-pct').textContent = filledSeeds + '/32 seeds';
+    updateSlotsGrid(head, seeds);
+
+    // Pool seeds display
+    const seedsHtml = seeds.slice(0, 8).map((s, i) => {
+      const isEmpty = s.every(b => b === 0);
+      const isLatest = i === (head % 32);
+      const color = isEmpty ? 'var(--text3)' : isLatest ? 'var(--green)' : 'var(--text2)';
+      const seedHex = Array.from(s).map(b => b.toString(16).padStart(2,'0')).join('');
+      return `<div style="color:${color};padding:3px 0;border-bottom:1px solid var(--border)">[${String(i).padStart(2,'0')}] ${isEmpty ? '(empty)' : seedHex.slice(0,32)+'...'} ${isLatest ? '← latest' : ''}</div>`;
+    }).join('');
+    document.getElementById('pool-seeds').innerHTML = seedsHtml;
+
+    // Requests tab
+    document.getElementById('req-pending').textContent = pendingCount;
+    document.getElementById('req-fulfilled').textContent = fmt(totalFulfilled);
+
+    // Pending list
+    const pendingHtml = pendingCount === 0
+      ? '<div style="font-family:var(--mono);font-size:12px;color:var(--text3);padding:8px 0">No pending requests · pool is idle</div>'
+      : pending.map(p => `<div class="pending-item"><span class="pending-addr">${p.publicKey.toString().slice(0,20)}...${p.publicKey.toString().slice(-8)}</span><a class="tx-link" href="${EXPLORER}/address/${p.publicKey.toString()}" target="_blank">view ↗</a></div>`).join('');
+    document.getElementById('pending-requests-list').innerHTML = pendingHtml;
+
+    // Auto-tune
+    updateAutoTune(pendingCount);
+
+    // ENTROPY tab
+    document.getElementById('entropy-cycles').textContent = fmt(totalSubmissions);
+    document.getElementById('entropy-fulfilled').textContent = fmt(totalFulfilled);
+
+    document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+
+  } catch(e) {
+    console.error(e);
+    document.getElementById('last-update').textContent = 'error: ' + e.message;
+  }
 }
 
 function updateSlotsGrid(head, seeds) {
@@ -871,10 +868,10 @@ function updateSlotsGrid(head, seeds) {
   for (let i = 0; i < 32; i++) {
     const cell = document.createElement('div');
     cell.className = 'slot-cell';
-    const isEmpty = seeds[i] === '0'.repeat(64);
+    const isEmpty = seeds[i].every(b => b === 0);
     if (!isEmpty) cell.classList.add('filled');
     if (i === headIdx) cell.classList.add('latest');
-    cell.title = `Slot ${i}: ${seeds[i].slice(0,8)}...`;
+    cell.title = `Slot ${i}`;
     grid.appendChild(cell);
   }
 }
@@ -888,78 +885,13 @@ function updateAutoTune(pending) {
   document.getElementById('autotune-recommended').textContent = rec;
 }
 
-async function fetchAll() {
-  try {
-    document.getElementById('last-update').textContent = 'fetching...';
-
-    const [oracle, pool, pending, balance] = await Promise.all([
-      fetchOracleState(),
-      fetchPoolState(),
-      fetchPendingRequests(),
-      fetchBalance()
-    ]);
-
-    const seq = Number(oracle.sequence);
-    const fulfilled = Number(oracle.totalFulfilled);
-    const head = Number(pool.head);
-    const pendingCount = pending.length;
-    const balanceXNT = (balance / 1e9).toFixed(2);
-
-    // Stats
-    document.getElementById('stat-seq').textContent = fmt(seq);
-    document.getElementById('stat-seq-sub').textContent = `commit-reveal cycles`;
-    document.getElementById('stat-pool').textContent = '32';
-    document.getElementById('stat-pending').textContent = pendingCount;
-    document.getElementById('stat-pending-sub').textContent = pendingCount === 0 ? 'queue empty' : 'awaiting fulfillment';
-    document.getElementById('stat-head').textContent = head % 32;
-    document.getElementById('stat-balance').textContent = balanceXNT;
-
-    // Table
-    document.getElementById('tbl-seq').textContent = fmt(seq);
-    document.getElementById('tbl-head').textContent = head % 32;
-    document.getElementById('tbl-fulfilled').textContent = fmt(fulfilled);
-
-    // Pool
-    const filledSeeds = pool.seeds.filter(s => s !== '0'.repeat(64)).length;
-    const pct = Math.round((filledSeeds / 32) * 100);
-    document.getElementById('pool-fill').style.width = pct + '%';
-    document.getElementById('pool-fill-pct').textContent = filledSeeds + '/32 seeds';
-    updateSlotsGrid(pool.head, pool.seeds);
-
-    // Pool seeds display
-    const seedsHtml = pool.seeds.slice(0, 8).map((s, i) => {
-      const isEmpty = s === '0'.repeat(64);
-      const isLatest = i === (head % 32);
-      const color = isEmpty ? 'var(--text3)' : isLatest ? 'var(--green)' : 'var(--text2)';
-      return `<div style="color:${color};padding:3px 0;border-bottom:1px solid var(--border)">[${String(i).padStart(2,'0')}] ${isEmpty ? '(empty)' : s.slice(0,32)+'...'} ${isLatest ? '← latest' : ''}</div>`;
-    }).join('');
-    document.getElementById('pool-seeds').innerHTML = seedsHtml;
-
-    // Requests
-    document.getElementById('req-pending').textContent = pendingCount;
-    document.getElementById('req-fulfilled').textContent = fmt(fulfilled);
-
-    // Pending list
-    const pendingHtml = pendingCount === 0
-      ? '<div style="font-family:var(--mono);font-size:12px;color:var(--text3);padding:8px 0">No pending requests · pool is idle</div>'
-      : pending.map(p => `<div class="pending-item"><span class="pending-addr">${p.pubkey.slice(0,20)}...${p.pubkey.slice(-8)}</span><a class="tx-link" href="${EXPLORER}/address/${p.pubkey}" target="_blank">view ↗</a></div>`).join('');
-    document.getElementById('pending-requests-list').innerHTML = pendingHtml;
-
-    // Auto-tune
-    updateAutoTune(pendingCount);
-
-    // ENTROPY
-    document.getElementById('entropy-cycles').textContent = fmt(seq);
-    document.getElementById('entropy-fulfilled').textContent = fmt(fulfilled);
-
-    const now = new Date();
-    document.getElementById('last-update').textContent = now.toLocaleTimeString();
-
-  } catch(e) {
-    console.error(e);
-    document.getElementById('last-update').textContent = 'error: ' + e.message;
-  }
+function showTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  event.target.classList.add('active');
 }
+window.showTab = showTab;
 
 function updateCost() {
   const sleep = parseInt(document.getElementById('c-sleep').value);
@@ -973,21 +905,22 @@ function updateCost() {
   const cycleFloor = 17;
   const cycleTime = Math.max(cycleFloor, sleep + cycleFloor);
   const cyclesPerDay = Math.floor(86400 / cycleTime);
-  const xntPerDay = cyclesPerDay * 0.000145; // ~3 TXs per cycle at ~5000 lamports each
+  // At 300s sleep ~288 cycles/day = ~1 XNT/day → ~0.00347 XNT per cycle
+  const xntPerDay = cyclesPerDay * 0.00347;
   const usdPerDay = xntPerDay * price;
   const refreshMins = Math.round((32 * cycleTime) / 60);
 
   document.getElementById('r-cycles').textContent = fmt(cyclesPerDay);
-  document.getElementById('r-xnt').textContent = xntPerDay.toFixed(4) + ' XNT';
+  document.getElementById('r-xnt').textContent = xntPerDay.toFixed(2) + ' XNT';
   document.getElementById('r-usd').textContent = '$' + usdPerDay.toFixed(4);
   document.getElementById('r-usdmo').textContent = '$' + (usdPerDay * 30).toFixed(3);
   document.getElementById('r-refresh').textContent = refreshMins < 60 ? refreshMins + ' min' : (refreshMins/60).toFixed(1) + ' hr';
 }
+window.updateCost = updateCost;
+window.fetchAll = fetchAll;
 
-// Init
 fetchAll();
 updateCost();
-// Auto-refresh every 30s
 setInterval(fetchAll, 30000);
 </script>
 </body>
