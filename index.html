@@ -551,25 +551,25 @@
           <div class="tier-dot idle"></div>
           <div class="tier-cond">pending = 0</div>
           <div class="tier-sleep">3600s</div>
-          <div class="tier-label">IDLE · ~0.7 XNT/day</div>
+          <div class="tier-label">IDLE · ~0.024 XNT/day</div>
         </div>
         <div class="tier">
           <div class="tier-dot low"></div>
           <div class="tier-cond">pending 1–5</div>
           <div class="tier-sleep">300s</div>
-          <div class="tier-label">LOW · ~7 XNT/day</div>
+          <div class="tier-label">LOW · ~0.27 XNT/day</div>
         </div>
         <div class="tier">
           <div class="tier-dot busy"></div>
           <div class="tier-cond">pending 6–20</div>
           <div class="tier-sleep">60s</div>
-          <div class="tier-label">BUSY · ~23 XNT/day</div>
+          <div class="tier-label">BUSY · ~1.5 XNT/day</div>
         </div>
         <div class="tier">
           <div class="tier-dot max"></div>
           <div class="tier-cond">pending > 20</div>
           <div class="tier-sleep">0s</div>
-          <div class="tier-label">MAX · ~35 XNT/day</div>
+          <div class="tier-label">MAX · ~5 XNT/day</div>
         </div>
       </div>
     </div>
@@ -1043,6 +1043,29 @@ async function fetchLiveFeed() {
     while(feed.children.length > 30) feed.removeChild(feed.lastChild);
     const fs = document.getElementById('feed-status');
     if(fs) fs.textContent = _seenSigs.size + ' txs seen';
+
+    // Auto-detect sleep from commit intervals
+    const commitTimes = result
+      .filter(tx => !tx.err && tx.blockTime)
+      .map(tx => tx.blockTime)
+      .sort((a,b) => b-a);
+    if (commitTimes.length >= 3) {
+      const intervals = [];
+      for (let i=0; i<commitTimes.length-1; i++) {
+        const gap = commitTimes[i] - commitTimes[i+1];
+        if (gap > 10 && gap < 7200) intervals.push(gap);
+      }
+      if (intervals.length > 0) {
+        const avgInterval = Math.round(intervals.reduce((a,b)=>a+b,0)/intervals.length);
+        const detectedSleep = Math.max(0, avgInterval - 17);
+        const sleepEl = document.getElementById('live-sleep');
+        if (sleepEl) sleepEl.textContent = detectedSleep + 's (detected)';
+        // Update cycles/day based on detected sleep
+        const detectedCycles = Math.floor(86400 / Math.max(17, detectedSleep + 17));
+        const lcd = document.getElementById('live-cycles-day');
+        if (lcd) lcd.textContent = fmt(detectedCycles) + ' cycles/day';
+      }
+    }
   } catch(e) {
     const fs = document.getElementById('feed-status');
     if(fs) fs.textContent = 'feed error: '+e.message;
