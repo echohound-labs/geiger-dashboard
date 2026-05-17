@@ -390,42 +390,42 @@
       <div class="stat-card">
         <div class="stat-label">Total Requests</div>
         <div class="stat-value" id="stat-seq"><span class="loading">loading</span></div>
-        <div class="stat-sub" id="stat-seq-sub">commit-reveal cycles</div>
+        <div class="stat-sub">randomness requests</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">Pool Seeds</div>
-        <div class="stat-value" id="stat-pool"><span class="loading">loading</span></div>
-        <div class="stat-sub">32 slot circular buffer</div>
+        <div class="stat-label">Total Fulfilled</div>
+        <div class="stat-value" id="stat-fulfilled"><span class="loading">loading</span></div>
+        <div class="stat-sub">completed</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">Pending Requests</div>
-        <div class="stat-value" id="stat-pending"><span class="loading">loading</span></div>
+        <div class="stat-label">Pending</div>
+        <div class="stat-value amber" id="stat-pending"><span class="loading">loading</span></div>
         <div class="stat-sub" id="stat-pending-sub">randomness queue</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Entropy Cycles</div>
+        <div class="stat-value" id="stat-submissions"><span class="loading">loading</span></div>
+        <div class="stat-sub">pool submissions</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Nodes online/total</div>
+        <div class="stat-value" id="stat-nodes" style="font-size:20px"><span class="loading">loading</span></div>
+        <div class="stat-sub">active / registered</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Pool Head</div>
         <div class="stat-value" id="stat-head"><span class="loading">loading</span></div>
-        <div class="stat-sub">next write slot</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">VDF Iters</div>
-        <div class="stat-value">5M</div>
-        <div class="stat-sub">FPGA resistant</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Binding Delay</div>
-        <div class="stat-value">100</div>
-        <div class="stat-sub">slots · ~40s</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Commit Delay</div>
-        <div class="stat-value">4</div>
-        <div class="stat-sub">slots · ~1.6s</div>
+        <div class="stat-sub">current write slot (0-31)</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Operator Balance</div>
         <div class="stat-value" id="stat-balance"><span class="loading">loading</span></div>
-        <div class="stat-sub">XNT</div>
+        <div class="stat-sub">XNT mainnet</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Oracle Status</div>
+        <div class="stat-value" id="stat-paused" style="font-size:18px"><span class="loading">loading</span></div>
+        <div class="stat-sub">paused flag</div>
       </div>
     </div>
 
