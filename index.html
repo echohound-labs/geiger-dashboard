@@ -442,10 +442,13 @@
             <tr><td>entropy_pool</td><td class="val">GDECYXCXietabJs9Y1baKzD3t4VFBw4eZWPnvYenyi77</td><td></td></tr>
             <tr><td>program_id</td><td class="val">BxUNg2yo5371BQMZPkfcxdCptFRDHkhvEXNM1QNPBRYU</td><td></td></tr>
             <tr><td>operator</td><td class="val">HGFisVbULNKqogtPuGTfcHG9y6i5nboZabYwifkiiodo</td><td></td></tr>
+            <tr><td>total_nodes</td><td class="val" id="tbl-nodes">—</td><td>registered nodes</td></tr>
             <tr><td>total_requests</td><td class="val" id="tbl-seq">—</td><td>randomness requests</td></tr>
-            <tr><td>pool_head</td><td class="val" id="tbl-head">—</td><td>current write index</td></tr>
             <tr><td>total_fulfillments</td><td class="val" id="tbl-fulfilled">—</td><td>randomness fulfilled</td></tr>
-            <tr><td>total_txs_seen</td><td class="val" id="tbl-txs">—</td><td>feed transactions</td></tr>
+            <tr><td>pool_head</td><td class="val" id="tbl-head">—</td><td>current write slot</td></tr>
+            <tr><td>pool_total_submissions</td><td class="val" id="tbl-submissions">—</td><td>entropy cycles total</td></tr>
+            <tr><td>paused</td><td class="val" id="tbl-paused">—</td><td>oracle status</td></tr>
+            <tr><td>total_txs_seen</td><td class="val" id="tbl-txs">—</td><td>live feed transactions</td></tr>
           </tbody>
         </table>
       </div>
@@ -601,8 +604,8 @@
           <div class="section-body">
             <div class="cost-input">
               <label>SLEEP SECONDS</label>
-              <input type="range" min="0" max="3600" step="60" value="3600" id="c-sleep" oninput="updateCost()">
-              <div class="val-display" id="c-sleep-val">3600s</div>
+              <input type="range" min="0" max="3600" step="60" value="300" id="c-sleep" oninput="updateCost()">
+              <div class="val-display" id="c-sleep-val">300s</div>
             </div>
 
             <div class="cost-input">
