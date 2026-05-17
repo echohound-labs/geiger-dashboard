@@ -978,7 +978,7 @@ let _totalFeeTxs = 0;
 
 async function fetchLiveFeed() {
   try {
-    const result = await rpc('getSignaturesForAddress',[OPERATOR,{limit:10,commitment:'confirmed'}]);
+    const result = await rpc('getSignaturesForAddress',[OPERATOR,{limit:30,commitment:'confirmed'}]);
     if (!result) return;
     const feed = document.getElementById('live-feed');
     if (!feed) return;
@@ -1045,14 +1045,16 @@ async function fetchLiveFeed() {
     if(fs) fs.textContent = _seenSigs.size + ' txs seen';
 
     // Auto-detect sleep from commit intervals
-    const commitTimes = result
+    // Every 3rd TX is a new cycle — measure gaps between every 3rd TX
+    const allTimes = result
       .filter(tx => !tx.err && tx.blockTime)
       .map(tx => tx.blockTime)
       .sort((a,b) => b-a);
-    if (commitTimes.length >= 3) {
+    const cycleTimes = allTimes.filter((_,i) => i % 3 === 0);
+    if (cycleTimes.length >= 3) {
       const intervals = [];
-      for (let i=0; i<commitTimes.length-1; i++) {
-        const gap = commitTimes[i] - commitTimes[i+1];
+      for (let i=0; i<cycleTimes.length-1; i++) {
+        const gap = cycleTimes[i] - cycleTimes[i+1];
         if (gap > 10 && gap < 7200) intervals.push(gap);
       }
       if (intervals.length > 0) {
