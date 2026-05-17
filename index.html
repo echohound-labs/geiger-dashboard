@@ -445,6 +445,7 @@
             <tr><td>total_requests</td><td class="val" id="tbl-seq">—</td><td>randomness requests</td></tr>
             <tr><td>pool_head</td><td class="val" id="tbl-head">—</td><td>current write index</td></tr>
             <tr><td>total_fulfillments</td><td class="val" id="tbl-fulfilled">—</td><td>randomness fulfilled</td></tr>
+            <tr><td>total_txs_seen</td><td class="val" id="tbl-txs">—</td><td>feed transactions</td></tr>
           </tbody>
         </table>
       </div>
@@ -580,7 +581,7 @@
       <div class="section-body">
         <table class="data-table">
           <tbody>
-            <tr><td>Current sleep</td><td class="val" id="autotune-sleep">3600s (idle)</td><td>config-mainnet.toml</td></tr>
+            <tr><td>Current sleep</td><td class="val" id="autotune-sleep">detecting...</td><td>from chain TX intervals</td></tr>
             <tr><td>Pending requests</td><td class="val" id="autotune-pending">—</td><td>live from chain</td></tr>
             <tr><td>Recommended sleep</td><td class="val" id="autotune-recommended">—</td><td>based on demand</td></tr>
             <tr><td>Cycle floor</td><td class="val">~17s</td><td>VDF + TX latency</td></tr>
@@ -1043,6 +1044,8 @@ async function fetchLiveFeed() {
     while(feed.children.length > 30) feed.removeChild(feed.lastChild);
     const fs = document.getElementById('feed-status');
     if(fs) fs.textContent = _seenSigs.size + ' txs seen';
+    const tblTxs = document.getElementById('tbl-txs');
+    if(tblTxs) tblTxs.textContent = fmt(_seenSigs.size);
 
     // Auto-detect sleep from commit intervals
     // Every 3rd TX is a new cycle — measure gaps between every 3rd TX
@@ -1060,6 +1063,7 @@ async function fetchLiveFeed() {
       if (intervals.length > 0) {
         const avgInterval = Math.round(intervals.reduce((a,b)=>a+b,0)/intervals.length);
         const detectedSleep = Math.max(0, avgInterval - 17);
+        window._detectedSleep = detectedSleep;
         const sleepEl = document.getElementById('live-sleep');
         if (sleepEl) sleepEl.textContent = detectedSleep + 's (detected)';
         // Update cycles/day based on detected sleep
