@@ -818,7 +818,7 @@ function updateCost() {
   document.getElementById('c-price-val').textContent='$'+price.toFixed(3);
   const cycleTime=Math.max(17,sleep+17);
   const cyclesPerDay=Math.floor(86400/cycleTime);
-  const xntPerDay=cyclesPerDay*0.0063;
+  const xntPerDay=cyclesPerDay*0.001009;
   const usdPerDay=xntPerDay*price;
   const refreshMins=Math.round((32*cycleTime)/60);
   document.getElementById('r-cycles').textContent=fmt(cyclesPerDay);
