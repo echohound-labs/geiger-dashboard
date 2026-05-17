@@ -253,6 +253,12 @@
   }
   .slot-cell.filled { background: var(--green2); }
   .slot-cell.latest { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .slot-cell.flash { animation: slotFlash 1.5s ease-out forwards; }
+  @keyframes slotFlash { 0% { background: #fff; box-shadow: 0 0 20px #fff; } 30% { background: var(--green); box-shadow: 0 0 15px var(--green); } 100% { background: var(--green); box-shadow: 0 0 6px var(--green); } }
+  .feed-item.new { animation: feedFlash 0.8s ease-out; }
+  @keyframes feedFlash { 0% { background: rgba(0,255,100,0.15); } 100% { background: transparent; } }
+  .pending-pulse { animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
 
   /* Cost estimator */
   .cost-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
@@ -870,6 +876,10 @@ async function fetchAll() {
     if(praw) { for(let i=0;i<32;i++) seeds.push(!praw.slice(8+i*32,8+i*32+32).every(b=>b===0)); }
     const head = praw ? u64(praw,1032) : 0;
     const totalSubmissions = praw ? u64(praw,1040) : 0;
+    if (_lastHead !== -1 && head !== _lastHead) {
+      flashSlot(head - 1);
+    }
+    _lastHead = head;
 
     // Pending requests: dataSize=122, status byte at offset 104 = 0
     const pending=(pendingRes||[]).filter(a=>{try{return decode(a.account.data[0])[104]===0;}catch(e){return false;}});
@@ -978,6 +988,20 @@ async function fetchAll() {
 let _seenSigs = new Set();
 let _totalFeesLamports = 0;
 let _totalFeeTxs = 0;
+let _lastHead = -1;
+
+function flashSlot(headIdx) {
+  const grid = document.getElementById('slots-grid');
+  if (!grid) return;
+  const slot = headIdx % 32;
+  const cells = grid.querySelectorAll('.slot-cell');
+  if (cells[slot]) {
+    cells[slot].classList.remove('flash');
+    void cells[slot].offsetWidth; // force reflow
+    cells[slot].classList.add('flash');
+    setTimeout(() => cells[slot].classList.remove('flash'), 1500);
+  }
+}
 
 async function fetchLiveFeed() {
   try {
@@ -1043,6 +1067,7 @@ async function fetchLiveFeed() {
       div.className = 'feed-item';
       const item = items[i] || {label:'⚙️ tx', fee:0};
       div.innerHTML = '<span class="feed-time">'+t+'</span><span class="feed-status'+(tx.err?' error':'')+'">'+item.label+err+'</span><span style="color:var(--text3);font-size:10px;margin-left:8px">'+(item.fee?((item.fee/1e9).toFixed(6)+' XNT'):'')+'</span><a class="tx-link" href="'+EXPLORER+'/tx/'+tx.signature+'" target="_blank">'+tx.signature.slice(0,20)+'... ↗</a>';
+      div.classList.add('new');
       feed.insertBefore(div, feed.firstChild);
     });
     while(feed.children.length > 30) feed.removeChild(feed.lastChild);
