@@ -434,6 +434,11 @@
         <div class="stat-value" id="stat-paused" style="font-size:18px"><span class="loading">loading</span></div>
         <div class="stat-sub">paused flag</div>
       </div>
+      <div class="stat-card">
+        <div class="stat-label">Pool Freshness</div>
+        <div class="stat-value" id="stat-freshness" style="font-size:18px">—</div>
+        <div class="stat-sub" id="stat-freshness-sub">last finalize</div>
+      </div>
     </div>
 
     <div class="section">
@@ -987,6 +992,27 @@ async function fetchAll() {
 
 // Live feed + real cost tracking
 let _seenSigs = new Set();
+let _lastFinalizeTime = null;
+
+function updatePoolFreshness() {
+  const el = document.getElementById('stat-freshness');
+  const sub = document.getElementById('stat-freshness-sub');
+  if (!el || !_lastFinalizeTime) return;
+  const age = (Date.now() - _lastFinalizeTime) / 1000 / 60;
+  if (age > 30) {
+    el.textContent = '🔴 STALE';
+    el.style.color = '#ff4444';
+    sub.textContent = age.toFixed(0) + ' min ago — fulfillments paused';
+  } else if (age > 15) {
+    el.textContent = '🟡 WARNING';
+    el.style.color = '#ffaa00';
+    sub.textContent = age.toFixed(0) + ' min ago';
+  } else {
+    el.textContent = '🟢 FRESH';
+    el.style.color = 'var(--green)';
+    sub.textContent = age.toFixed(1) + ' min ago';
+  }
+}
 let _totalFeesLamports = 0;
 let _totalFeeTxs = 0;
 let _lastHead = -1;
@@ -1054,7 +1080,11 @@ async function fetchLiveFeed() {
       const logs = d?.meta?.logMessages || [];
       const fee = d?.meta?.fee || 0;
       let label = '⚙️ tx';
-      if (logs.some(l=>l.includes('FinalizeEntropy'))) label='✅ Finalize';
+      if (logs.some(l=>l.includes('FinalizeEntropy'))) {
+        label='✅ Finalize';
+        _lastFinalizeTime = Date.now();
+        updatePoolFreshness();
+      }
       else if (logs.some(l=>l.includes('RevealEntropy'))) label='👁 Reveal';
       else if (logs.some(l=>l.includes('CommitEntropy'))) label='🔒 Commit';
       else if (logs.some(l=>l.includes('FulfillRandomness'))) label='🎲 Fulfill';
@@ -1114,6 +1144,7 @@ setInterval(fetchAll,30000);
 fetchLiveFeed();
 fetchXntPrice();
 setInterval(fetchLiveFeed,15000);
+setInterval(updatePoolFreshness,60000);
 setInterval(fetchXntPrice,60000);
 </script>
 </body>
