@@ -636,7 +636,7 @@
             <tr><td>Current sleep</td><td class="val" id="autotune-sleep">detecting...</td><td>from chain TX intervals</td></tr>
             <tr><td>Pending requests</td><td class="val" id="autotune-pending">—</td><td>live from chain</td></tr>
             <tr><td>Proposed sleep</td><td class="val" id="autotune-recommended">—</td><td>proposed tier, not applied</td></tr>
-            <tr><td>Cycle floor</td><td class="val">~17s</td><td>VDF + TX latency</td></tr>
+            <tr><td>Cycle floor</td><td class="val">~19s</td><td>VDF + TX latency</td></tr>
             <tr><td>Max throughput</td><td class="val">~5,000 cycles/day</td><td>sleep = 0s</td></tr>
           </tbody>
         </table>
@@ -675,7 +675,7 @@
               <div class="cost-result-row"><span class="k">USD / day</span><span class="v" id="r-usd">—</span></div>
               <div class="cost-result-row"><span class="k">USD / month</span><span class="v" id="r-usdmo">—</span></div>
               <div class="cost-result-row"><span class="k">pool refresh rate</span><span class="v" id="r-refresh">—</span></div>
-              <div class="cost-result-row"><span class="k">cycle floor</span><span class="v">~17s (VDF + tx latency)</span></div>
+              <div class="cost-result-row"><span class="k">cycle floor</span><span class="v">~19s (VDF + tx latency)</span></div>
             </div>
           </div>
         </div>
@@ -825,6 +825,8 @@ const RANDOMNESS_REQUEST_SIZE = 138;
 const CANCEL_WINDOW_SLOTS = 138; // fulfil allowed while slot <= request_slot + 138, cancel-only after
 // v8.1 operator flow: one paired reveal+commit tx, then one finalize tx
 const TXS_PER_CYCLE = 2;
+// measured cycle floor at sleep=0 (VDF + tx latency), seconds
+const CYCLE_FLOOR_S = 19;
 const OPERATOR = 'HGFisVbULNKqogtPuGTfcHG9y6i5nboZabYwifkiiodo';
 const EXPLORER = 'https://explorer.x1.xyz';
 const XNT_VAULT_XNT  = '8wvV4HKBDFMLEUkVWp1WPNa5ano99XCm3f9t3troyLb';
@@ -883,7 +885,7 @@ function updateCost() {
   document.getElementById('c-sleep-val').textContent=sleep+'s';
 
   document.getElementById('c-price-val').textContent='$'+price.toFixed(3);
-  const cycleTime=Math.max(17,sleep+17);
+  const cycleTime=Math.max(CYCLE_FLOOR_S,sleep+CYCLE_FLOOR_S);
   const cyclesPerDay=Math.floor(86400/cycleTime);
   const xntPerDay=cyclesPerDay*(_measuredXntPerCycle ?? FALLBACK_XNT_PER_CYCLE);
   const usdPerDay=xntPerDay*price;
@@ -1140,13 +1142,13 @@ async function fetchLiveFeed() {
       const xntPerCycle = avgFeeXNT * TXS_PER_CYCLE;
       _measuredXntPerCycle = xntPerCycle;
       updateCost();
-      const cyclesPerDaySleep0 = Math.floor(86400 / 17);
+      const cyclesPerDaySleep0 = Math.floor(86400 / CYCLE_FLOOR_S);
       const xntPerDaySleep0 = xntPerCycle * cyclesPerDaySleep0;
       const rcp = document.getElementById('rc-per-cycle');
       if(rcp) rcp.textContent = xntPerCycle.toFixed(6) + ' XNT ('+_totalFeeTxs+' txs measured)';
       const rcpr = document.getElementById('rc-projected');
       const detSleep = window._detectedSleep !== undefined ? window._detectedSleep : 300;
-      const detCycles = Math.floor(86400 / Math.max(17, detSleep + 17));
+      const detCycles = Math.floor(86400 / Math.max(CYCLE_FLOOR_S, detSleep + CYCLE_FLOOR_S));
       const xntPerDayDetected = xntPerCycle * detCycles;
       if(rcpr) rcpr.textContent = xntPerDayDetected.toFixed(4) + ' XNT/day @ ~'+detSleep+'s';
       const lxc = document.getElementById('live-xnt-cycle');
@@ -1214,14 +1216,14 @@ async function fetchLiveFeed() {
       }
       if (intervals.length > 0) {
         const avgInterval = Math.round(intervals.reduce((a,b)=>a+b,0)/intervals.length);
-        const detectedSleep = Math.max(0, avgInterval - 17);
+        const detectedSleep = Math.max(0, avgInterval - CYCLE_FLOOR_S);
         window._detectedSleep = detectedSleep;
         const sleepEl = document.getElementById('live-sleep');
         if (sleepEl) sleepEl.textContent = detectedSleep + 's (detected)';
         const ats = document.getElementById('autotune-sleep');
         if (ats) ats.textContent = detectedSleep + 's';
         // Update cycles/day based on detected sleep
-        const detectedCycles = Math.floor(86400 / Math.max(17, detectedSleep + 17));
+        const detectedCycles = Math.floor(86400 / Math.max(CYCLE_FLOOR_S, detectedSleep + CYCLE_FLOOR_S));
         const lcd = document.getElementById('live-cycles-day');
         if (lcd) lcd.textContent = fmt(detectedCycles) + ' cycles/day';
       }
