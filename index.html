@@ -947,6 +947,7 @@ async function fetchAll() {
     if(sn){sn.textContent=onlineCount+' online / '+allNodes.length+' registered';sn.style.color=onlineCount>0?'var(--green)':'var(--red)';}
     document.getElementById('stat-head').textContent=head%32;
     document.getElementById('stat-balance').textContent=balanceXNT;
+    const lb=document.getElementById('live-bal'); if(lb) lb.textContent=balanceXNT+' XNT';
     const sp=document.getElementById('stat-paused');
     if(sp){sp.textContent=paused?'PAUSED':'ACTIVE';sp.style.color=paused?'var(--red)':'var(--green)';}
 
@@ -1155,6 +1156,8 @@ async function fetchLiveFeed() {
         window._detectedSleep = detectedSleep;
         const sleepEl = document.getElementById('live-sleep');
         if (sleepEl) sleepEl.textContent = detectedSleep + 's (detected)';
+        const ats = document.getElementById('autotune-sleep');
+        if (ats) ats.textContent = detectedSleep + 's';
         // Update cycles/day based on detected sleep
         const detectedCycles = Math.floor(86400 / Math.max(17, detectedSleep + 17));
         const lcd = document.getElementById('live-cycles-day');
