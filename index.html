@@ -1082,8 +1082,11 @@ async function fetchLiveFeed() {
       let label = '⚙️ tx';
       if (logs.some(l=>l.includes('FinalizeEntropy'))) {
         label='✅ Finalize';
-        _lastFinalizeTime = Date.now();
-        updatePoolFreshness();
+        const bt = tx.blockTime || d?.blockTime;
+        if (bt) {
+          _lastFinalizeTime = Math.max(_lastFinalizeTime || 0, bt*1000);
+          updatePoolFreshness();
+        }
       }
       else if (logs.some(l=>l.includes('RevealEntropy'))) label='👁 Reveal';
       else if (logs.some(l=>l.includes('CommitEntropy'))) label='🔒 Commit';
