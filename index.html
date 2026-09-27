@@ -919,14 +919,14 @@ async function fetchAll() {
     ]);
 
     if (!oracleRes?.value) throw new Error('oracle state not found');
-    // OracleState: disc(8)+authority(32)+total_nodes(8)+total_requests(8)+total_fulfillments(8)+paused(1)+bump(1)
+    // OracleState (v8.1, 98 bytes): disc(8)+authority(32)+total_nodes(8)+total_requests(8)+total_fulfillments(8)+paused(1)+bump(1)+appended fields (not read here)
     const oraw=decode(oracleRes.value.data[0]);
     const totalNodes=u64(oraw,40);
     const totalRequests=u64(oraw,48);
     const totalFulfillments=u64(oraw,56);
     const paused=oraw[64]===1;
 
-    // EntropyPool: disc(8)+seeds(1024)+head(8)+total_submissions(8)+bump(1)
+    // EntropyPool (v8.1, 1305 bytes): disc(8)+seeds(1024)+head(8)+total_submissions(8)+bump(1)+appended fields (not read here)
     const praw = poolRes?.value ? decode(poolRes.value.data[0]) : null;
     const seeds=[];
     if(praw) { for(let i=0;i<32;i++) seeds.push(!praw.slice(8+i*32,8+i*32+32).every(b=>b===0)); }
