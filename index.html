@@ -1132,8 +1132,12 @@ async function fetchLiveFeed() {
       else if (logs.some(l=>l.includes('RequestRandomness'))) label='📥 Request';
       return {tx, label, fee};
     });
-    newTxs.forEach((tx, i) => {
-      const t = tx.blockTime ? new Date(tx.blockTime*1000).toLocaleTimeString() : '--:--';
+    if (feed.querySelector('.loading')) feed.innerHTML = '';
+    // RPC returns newest first; insert oldest→newest at the top so newest ends up first
+    newTxs.forEach((_, j) => {
+      const i = newTxs.length - 1 - j;
+      const tx = newTxs[i];
+      const t =tx.blockTime ? new Date(tx.blockTime*1000).toLocaleTimeString() : '--:--';
       const err = tx.err ? ' ❌' : '';
       const div = document.createElement('div');
       div.className = 'feed-item';
