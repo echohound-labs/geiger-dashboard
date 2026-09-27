@@ -594,8 +594,12 @@
     <div class="section">
       <div class="section-header">
         <span class="section-title">Dynamic sleep — demand-aware throttling</span>
+        <span class="roadmap-badge planned">PROPOSAL · NOT ACTIVE</span>
       </div>
       <div class="section-body">
+        <p style="font-family:var(--mono);font-size:11px;color:var(--amber);padding-bottom:8px;border-bottom:1px solid var(--border)">
+          Proposed tiers only. The daemon currently runs continuously (no sleep between cycles).
+        </p>
         <div class="tier">
           <div class="tier-dot idle"></div>
           <div class="tier-cond">pending = 0</div>
@@ -631,7 +635,7 @@
           <tbody>
             <tr><td>Current sleep</td><td class="val" id="autotune-sleep">detecting...</td><td>from chain TX intervals</td></tr>
             <tr><td>Pending requests</td><td class="val" id="autotune-pending">—</td><td>live from chain</td></tr>
-            <tr><td>Recommended sleep</td><td class="val" id="autotune-recommended">—</td><td>based on demand</td></tr>
+            <tr><td>Proposed sleep</td><td class="val" id="autotune-recommended">—</td><td>proposed tier, not applied</td></tr>
             <tr><td>Cycle floor</td><td class="val">~17s</td><td>VDF + TX latency</td></tr>
             <tr><td>Max throughput</td><td class="val">~5,000 cycles/day</td><td>sleep = 0s</td></tr>
           </tbody>
