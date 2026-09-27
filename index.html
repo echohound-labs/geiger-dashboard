@@ -356,8 +356,8 @@
   footer {
     margin-top: 32px; padding-top: 16px;
     border-top: 1px solid var(--border);
-    display: flex; justify-content: space-between; align-items: center;
   }
+  .footer-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
   footer p { font-family: var(--mono); font-size: 10px; color: var(--text3); letter-spacing: 0.06em; }
   .refresh-btn {
     background: none; border: 1px solid var(--border2); border-radius: 4px;
@@ -789,8 +789,10 @@
 
   <footer>
     <p style="font-size:10px;color:var(--muted);margin-bottom:8px;max-width:800px;line-height:1.5;">⚠️ <strong>Disclaimer:</strong> GERO is a cryptographic randomness oracle providing infrastructure services only. Echo Hound Labs does not operate, endorse, or participate in any gambling, lottery, or chance-based application. Developers integrating GERO are solely responsible for compliance with applicable laws. Use at your own risk.</p>
-    <p>echohound-labs · geiger-entropy-oracle · X1 mainnet · next-gen build on testnet</p>
-    <button class="refresh-btn" onclick="fetchAll()">↻ refresh</button>
+    <div class="footer-row">
+      <p>echohound-labs · geiger-entropy-oracle · X1 mainnet · next-gen build on testnet</p>
+      <button class="refresh-btn" onclick="fetchAll()">↻ refresh</button>
+    </div>
   </footer>
 
 </div>
