@@ -428,7 +428,7 @@
       <div class="stat-card">
         <div class="stat-label">Pool Head</div>
         <div class="stat-value" id="stat-head"><span class="loading">loading</span></div>
-        <div class="stat-sub">current write slot (0-31)</div>
+        <div class="stat-sub">next write slot (0-31)</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Operator Balance</div>
@@ -462,7 +462,7 @@
             <tr><td>total_nodes</td><td class="val" id="tbl-nodes">—</td><td>registered nodes</td></tr>
             <tr><td>total_requests</td><td class="val" id="tbl-seq">—</td><td>randomness requests</td></tr>
             <tr><td>total_fulfillments</td><td class="val" id="tbl-fulfilled">—</td><td>randomness fulfilled</td></tr>
-            <tr><td>pool_head</td><td class="val" id="tbl-head">—</td><td>current write slot</td></tr>
+            <tr><td>pool_head</td><td class="val" id="tbl-head">—</td><td>next write slot</td></tr>
             <tr><td>pool_total_submissions</td><td class="val" id="tbl-submissions">—</td><td>entropy cycles total</td></tr>
             <tr><td>paused</td><td class="val" id="tbl-paused">—</td><td>oracle status</td></tr>
           </tbody>
@@ -867,15 +867,20 @@ function updateCost() {
   document.getElementById('r-refresh').textContent=refreshMins<60?refreshMins+' min':(refreshMins/60).toFixed(1)+' hr';
 }
 
+// pool.head is the NEXT write slot (contract writes seeds[head%32], then head+=1),
+// so the most recently written slot is (head-1) mod 32.
+function lastWrittenSlot(head) { return head > 0 ? (head-1)%32 : -1; }
+
 function updateSlotsGrid(head, seeds) {
   const grid=document.getElementById('slots-grid');
   if(!grid) return;
   grid.innerHTML='';
+  const latest=lastWrittenSlot(head);
   for(let i=0;i<32;i++) {
     const cell=document.createElement('div');
     cell.className='slot-cell';
     if(seeds[i]) cell.classList.add('filled');
-    if(i===head%32) cell.classList.add('latest');
+    if(i===latest) cell.classList.add('latest');
     grid.appendChild(cell);
   }
 }
@@ -906,10 +911,6 @@ async function fetchAll() {
     if(praw) { for(let i=0;i<32;i++) seeds.push(!praw.slice(8+i*32,8+i*32+32).every(b=>b===0)); }
     const head = praw ? u64(praw,1032) : 0;
     const totalSubmissions = praw ? u64(praw,1040) : 0;
-    if (_lastHead !== -1 && head !== _lastHead) {
-      flashSlot(head - 1);
-    }
-    _lastHead = head;
 
     // Pending requests: dataSize=122, status byte at offset 104 = 0
     const pending=(pendingRes||[]).filter(a=>{try{return decode(a.account.data[0])[104]===0;}catch(e){return false;}});
@@ -975,15 +976,25 @@ async function fetchAll() {
     const poolFill=document.getElementById('pool-fill'); if(poolFill) poolFill.style.width=Math.round(filledCount/32*100)+'%';
     const poolPct=document.getElementById('pool-fill-pct'); if(poolPct) poolPct.textContent=filledCount+'/32 seeds';
     updateSlotsGrid(head,seeds);
+    // Flash after the grid rebuild, otherwise the animated cell is thrown away
+    if (_lastHead !== -1 && head !== _lastHead && head > 0) {
+      flashSlot(lastWrittenSlot(head));
+    }
+    _lastHead = head;
     const poolSeedsEl=document.getElementById('pool-seeds');
-    if(poolSeedsEl){
-      poolSeedsEl.innerHTML=Array.from({length:8},(_,i)=>{
-        const filled=seeds[i];
-        const isLatest=i===head%32;
-        const color=!filled?'var(--text3)':isLatest?'var(--green)':'var(--text2)';
-        const seedHex=toHex(praw,8+i*32,16);
-        return '<div style="color:'+color+';padding:3px 0;border-bottom:1px solid var(--border)">['+String(i).padStart(2,'0')+'] '+(filled?seedHex+'...':'(empty)')+' '+(isLatest?'← latest':'')+'</div>';
-      }).join('');
+    if(poolSeedsEl && praw){
+      // 8 most recent writes, newest first: head-1, head-2, ...
+      const recent=Math.min(8,head);
+      poolSeedsEl.innerHTML=recent===0
+        ?'(no seeds written yet)'
+        :Array.from({length:recent},(_,k)=>{
+          const i=(head-1-k)%32;
+          const filled=seeds[i];
+          const isLatest=k===0;
+          const color=!filled?'var(--text3)':isLatest?'var(--green)':'var(--text2)';
+          const seedHex=toHex(praw,8+i*32,16);
+          return '<div style="color:'+color+';padding:3px 0;border-bottom:1px solid var(--border)">['+String(i).padStart(2,'0')+'] '+(filled?seedHex+'...':'(empty)')+' '+(isLatest?'← latest':'')+'</div>';
+        }).join('');
     }
 
     // Requests tab
