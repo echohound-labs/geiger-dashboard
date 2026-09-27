@@ -370,6 +370,18 @@
   /* Tx link */
   a.tx-link { color: var(--text3); text-decoration: none; font-size: 10px; }
   a.tx-link:hover { color: var(--green); }
+
+  /* Mobile */
+  header { flex-wrap: wrap; gap: 12px; }
+  .header-right { flex-wrap: wrap; }
+  .logo-text p { overflow-wrap: anywhere; }
+  nav { overflow-x: auto; scrollbar-width: none; }
+  nav::-webkit-scrollbar { display: none; }
+  nav button { flex-shrink: 0; white-space: nowrap; }
+  @media (max-width: 640px) {
+    .wrap { padding: 16px; }
+    .cost-grid { grid-template-columns: 1fr; }
+  }
 </style>
 </head>
 <body>
