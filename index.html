@@ -822,6 +822,7 @@ const ENTROPY_POOL = 'GDECYXCXietabJs9Y1baKzD3t4VFBw4eZWPnvYenyi77';
 const DISC_ENTROPY_NODE = 'AgqNVQJwzA7';
 const DISC_RANDOMNESS_REQUEST = 'hxtpFJ1UcTH';
 const RANDOMNESS_REQUEST_SIZE = 138;
+const CANCEL_WINDOW_SLOTS = 138; // fulfil allowed while slot <= request_slot + 138, cancel-only after
 // v8.1 operator flow: one paired reveal+commit tx, then one finalize tx
 const TXS_PER_CYCLE = 2;
 const OPERATOR = 'HGFisVbULNKqogtPuGTfcHG9y6i5nboZabYwifkiiodo';
@@ -916,12 +917,13 @@ async function fetchAll() {
   try {
     document.getElementById('last-update').textContent='fetching...';
 
-    const [oracleRes,poolRes,pendingRes,balRes,nodesRes] = await Promise.all([
+    const [oracleRes,poolRes,pendingRes,balRes,nodesRes,slotRes] = await Promise.all([
       rpc('getAccountInfo',[ORACLE_STATE,{encoding:'base64'}]).catch(e=>null),
       rpc('getAccountInfo',[ENTROPY_POOL,{encoding:'base64'}]).catch(e=>null),
       rpc('getProgramAccounts',[PROGRAM_ID,{filters:[{memcmp:{offset:0,bytes:DISC_RANDOMNESS_REQUEST}},{dataSize:RANDOMNESS_REQUEST_SIZE}],encoding:'base64'}]).catch(e=>null),
       rpc('getBalance',[OPERATOR]).catch(e=>null),
-      rpc('getProgramAccounts',[PROGRAM_ID,{filters:[{memcmp:{offset:0,bytes:DISC_ENTROPY_NODE}}],encoding:'base64'}]).catch(e=>null)
+      rpc('getProgramAccounts',[PROGRAM_ID,{filters:[{memcmp:{offset:0,bytes:DISC_ENTROPY_NODE}}],encoding:'base64'}]).catch(e=>null),
+      rpc('getSlot',[{commitment:'confirmed'}]).catch(e=>null)
     ]);
 
     if (!oracleRes?.value) throw new Error('oracle state not found');
@@ -939,9 +941,16 @@ async function fetchAll() {
     const head = praw ? u64(praw,1032) : 0;
     const totalSubmissions = praw ? u64(praw,1040) : 0;
 
-    // Pending requests (v8.1, 138 bytes): disc(8)+requester(32)+user_seed(32)+result(32)+status(1)+...
-    // status byte at offset 104: 0 = Pending
-    const pending=(pendingRes||[]).filter(a=>{try{return decode(a.account.data[0])[104]===0;}catch(e){return false;}});
+    // Pending requests (v8.1, 138 bytes): disc(8)+requester(32)+user_seed(32)+result(32)+status(1)
+    // +requested_at(8)+fulfilled_at(8)+bump(1)+request_slot(8)+bound_contribution_id(8)
+    // status byte at offset 104: 0 = Pending; request_slot at offset 122
+    // Only requests still inside their fulfil window count as pending; older ones are cancel-only.
+    // If the current slot is unavailable, every status-0 request is treated as pending.
+    const currentSlot=typeof slotRes==='number'?slotRes:null;
+    const open=(pendingRes||[]).map(a=>{try{const d=decode(a.account.data[0]);return d[104]===0?{pubkey:a.pubkey,requestSlot:u64(d,122)}:null;}catch(e){return null;}}).filter(Boolean);
+    const inWindow=r=>currentSlot===null||r.requestSlot+CANCEL_WINDOW_SLOTS>=currentSlot;
+    const pending=open.filter(inWindow);
+    const expired=open.filter(r=>!inWindow(r));
     const pendingCount=pending.length;
 
     const balanceXNT=(((balRes?.value ?? balRes) || 0)/1e9).toFixed(2);
@@ -1032,9 +1041,14 @@ async function fetchAll() {
     const rf=document.getElementById('req-fulfilled'); if(rf) rf.textContent=fmt(totalFulfillments);
     const pl=document.getElementById('pending-requests-list');
     if(pl){
-      pl.innerHTML=pendingCount===0
+      const reqItem=(p,muted)=>'<div class="pending-item"><span class="pending-addr"'+(muted?' style="color:var(--text3)"':'')+'>'+p.pubkey.slice(0,20)+'...'+p.pubkey.slice(-8)+'</span><a class="tx-link" href="'+EXPLORER+'/address/'+p.pubkey+'" target="_blank">view ↗</a></div>';
+      pl.innerHTML=(pendingCount===0
         ?'<div style="font-family:var(--mono);font-size:12px;color:var(--text3);padding:8px 0">No pending requests — pool is idle</div>'
-        :pending.map(p=>'<div class="pending-item"><span class="pending-addr">'+p.pubkey.slice(0,20)+'...'+p.pubkey.slice(-8)+'</span><a class="tx-link" href="'+EXPLORER+'/address/'+p.pubkey+'" target="_blank">view ↗</a></div>').join('');
+        :pending.map(p=>reqItem(p,false)).join(''))
+        +(expired.length
+          ?'<div style="font-family:var(--mono);font-size:11px;color:var(--text3);padding:12px 0 4px">expired (cancel-only) · '+expired.length+'</div>'
+            +expired.map(p=>reqItem(p,true)).join('')
+          :'');
     }
 
     // Auto-tune
