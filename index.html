@@ -634,7 +634,7 @@
               <div class="cost-result-row"><span class="k">USD / day</span><span class="v" id="r-usd">—</span></div>
               <div class="cost-result-row"><span class="k">USD / month</span><span class="v" id="r-usdmo">—</span></div>
               <div class="cost-result-row"><span class="k">pool refresh rate</span><span class="v" id="r-refresh">—</span></div>
-              <div class="cost-result-row"><span class="k">cycle floor</span><span class="v">~17s (physics limit)</span></div>
+              <div class="cost-result-row"><span class="k">cycle floor</span><span class="v">~17s (VDF + tx latency)</span></div>
             </div>
           </div>
         </div>
@@ -780,6 +780,8 @@ const EXPLORER = 'https://explorer.x1.xyz';
 const XNT_VAULT_XNT  = '8wvV4HKBDFMLEUkVWp1WPNa5ano99XCm3f9t3troyLb';
 const XNT_VAULT_USDC = '7iw2adw8Af7x3pY7gj5RwczFXuGjCoX92Gfy3avwXQtg';
 let _xntUsdPrice = null;
+const FALLBACK_XNT_PER_CYCLE = 0.001659;
+let _measuredXntPerCycle = null;
 
 async function fetchXntPrice() {
   try {
@@ -833,7 +835,7 @@ function updateCost() {
   document.getElementById('c-price-val').textContent='$'+price.toFixed(3);
   const cycleTime=Math.max(17,sleep+17);
   const cyclesPerDay=Math.floor(86400/cycleTime);
-  const xntPerDay=cyclesPerDay*0.001009;
+  const xntPerDay=cyclesPerDay*(_measuredXntPerCycle ?? FALLBACK_XNT_PER_CYCLE);
   const usdPerDay=xntPerDay*price;
   const refreshMins=Math.round((32*cycleTime)/60);
   document.getElementById('r-cycles').textContent=fmt(cyclesPerDay);
@@ -1059,6 +1061,8 @@ async function fetchLiveFeed() {
       const avgFeeXNT = avgFeeLamports / 1e9;
       const txsPerCycle = 3; // commit + reveal + finalize
       const xntPerCycle = avgFeeXNT * txsPerCycle;
+      _measuredXntPerCycle = xntPerCycle;
+      updateCost();
       const cyclesPerDaySleep0 = Math.floor(86400 / 17);
       const xntPerDaySleep0 = xntPerCycle * cyclesPerDaySleep0;
       const rcp = document.getElementById('rc-per-cycle');
