@@ -822,6 +822,8 @@ const ENTROPY_POOL = 'GDECYXCXietabJs9Y1baKzD3t4VFBw4eZWPnvYenyi77';
 const DISC_ENTROPY_NODE = 'AgqNVQJwzA7';
 const DISC_RANDOMNESS_REQUEST = 'hxtpFJ1UcTH';
 const RANDOMNESS_REQUEST_SIZE = 138;
+// v8.1 operator flow: one paired reveal+commit tx, then one finalize tx
+const TXS_PER_CYCLE = 2;
 const OPERATOR = 'HGFisVbULNKqogtPuGTfcHG9y6i5nboZabYwifkiiodo';
 const EXPLORER = 'https://explorer.x1.xyz';
 const XNT_VAULT_XNT  = '8wvV4HKBDFMLEUkVWp1WPNa5ano99XCm3f9t3troyLb';
@@ -1121,8 +1123,7 @@ async function fetchLiveFeed() {
     if (_totalFeeTxs > 0) {
       const avgFeeLamports = _totalFeesLamports / _totalFeeTxs;
       const avgFeeXNT = avgFeeLamports / 1e9;
-      const txsPerCycle = 3; // commit + reveal + finalize
-      const xntPerCycle = avgFeeXNT * txsPerCycle;
+      const xntPerCycle = avgFeeXNT * TXS_PER_CYCLE;
       _measuredXntPerCycle = xntPerCycle;
       updateCost();
       const cyclesPerDaySleep0 = Math.floor(86400 / 17);
@@ -1145,8 +1146,11 @@ async function fetchLiveFeed() {
       const d = details[i];
       const logs = d?.meta?.logMessages || [];
       const fee = d?.meta?.fee || 0;
+      const ixs = logs.filter(l=>l.startsWith('Program log: Instruction: ')).map(l=>l.slice(26));
+      const has = n => ixs.includes(n);
+      const reveal = has('RevealEntropyV6') || has('RevealEntropy');
       let label = '⚙️ tx';
-      if (logs.some(l=>l.includes('FinalizeEntropy'))) {
+      if (has('FinalizeEntropy')) {
         label='✅ Finalize';
         const bt = tx.blockTime || d?.blockTime;
         if (bt) {
@@ -1154,10 +1158,11 @@ async function fetchLiveFeed() {
           updatePoolFreshness();
         }
       }
-      else if (logs.some(l=>l.includes('RevealEntropy'))) label='👁 Reveal';
-      else if (logs.some(l=>l.includes('CommitEntropy'))) label='🔒 Commit';
-      else if (logs.some(l=>l.includes('FulfillRandomness'))) label='🎲 Fulfill';
-      else if (logs.some(l=>l.includes('RequestRandomness'))) label='📥 Request';
+      else if (reveal && has('CommitEntropy')) label='👁 Reveal + 🔒 Commit';
+      else if (reveal) label='👁 Reveal';
+      else if (has('CommitEntropy')) label='🔒 Commit';
+      else if (has('FulfillRandomness')) label='🎲 Fulfill';
+      else if (has('RequestRandomness')) label='📥 Request';
       return {tx, label, fee};
     });
     if (feed.querySelector('.loading')) feed.innerHTML = '';
@@ -1181,12 +1186,12 @@ async function fetchLiveFeed() {
     if(tblTxs) tblTxs.textContent = fmt(_seenSigs.size);
 
     // Auto-detect sleep from commit intervals
-    // Every 3rd TX is a new cycle — measure gaps between every 3rd TX
+    // Every TXS_PER_CYCLE-th TX is a new cycle — measure gaps between them
     const allTimes = result
       .filter(tx => !tx.err && tx.blockTime)
       .map(tx => tx.blockTime)
       .sort((a,b) => b-a);
-    const cycleTimes = allTimes.filter((_,i) => i % 3 === 0);
+    const cycleTimes = allTimes.filter((_,i) => i % TXS_PER_CYCLE === 0);
     if (cycleTimes.length >= 3) {
       const intervals = [];
       for (let i=0; i<cycleTimes.length-1; i++) {
