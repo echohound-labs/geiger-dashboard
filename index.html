@@ -199,6 +199,12 @@
   .data-table td:first-child { color: var(--text3); width: 200px; }
   .data-table td:last-child { color: var(--text); font-size: 11px; color: var(--text3); }
   .data-table .val { color: var(--green); }
+  .data-table th {
+    padding: 8px 12px; font-size: 10px; font-weight: normal; text-align: left;
+    color: var(--text3); letter-spacing: 0.1em; text-transform: uppercase;
+    border-bottom: 1px solid var(--border2);
+  }
+  .nodes-table td:first-child { width: auto; }
 
   /* Pool visual */
   .pool-bar {
@@ -459,6 +465,22 @@
             <tr><td>pool_head</td><td class="val" id="tbl-head">—</td><td>current write slot</td></tr>
             <tr><td>pool_total_submissions</td><td class="val" id="tbl-submissions">—</td><td>entropy cycles total</td></tr>
             <tr><td>paused</td><td class="val" id="tbl-paused">—</td><td>oracle status</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Nodes</span>
+      </div>
+      <div class="section-body">
+        <table class="data-table nodes-table">
+          <thead>
+            <tr><th>status</th><th>node</th><th>submissions</th><th>last seen</th><th>reputation</th></tr>
+          </thead>
+          <tbody id="nodes-list">
+            <tr><td colspan="5"><span class="loading">loading</span></td></tr>
           </tbody>
         </table>
       </div>
@@ -944,7 +966,7 @@ async function fetchAll() {
         const col=n.online?'var(--green)':'var(--red)';
         const status=n.online?'● ONLINE':'○ OFFLINE';
         return '<tr><td><span style="color:'+col+';font-family:var(--mono);font-size:11px">'+status+'</span></td><td class="val">'+n.pubkey.slice(0,16)+'...</td><td class="val">'+fmt(n.submissions)+'</td><td style="color:var(--text3)">'+ago+'</td><td style="color:var(--text3)">'+n.reputation+'/100</td></tr>';
-      }).join('');
+      }).join('') || '<tr><td colspan="5" style="color:var(--text3)">no registered nodes found</td></tr>';
     }
 
     // Pool
