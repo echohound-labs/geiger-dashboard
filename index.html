@@ -221,7 +221,7 @@
   /* Feed */
   .feed {
     font-family: var(--mono); font-size: 11px;
-    max-height: 240px; overflow-y: auto;
+    max-height: 240px; overflow-y: auto; overflow-x: hidden;
   }
   .feed::-webkit-scrollbar { width: 4px; }
   .feed::-webkit-scrollbar-track { background: var(--bg3); }
@@ -230,11 +230,14 @@
     padding: 6px 0;
     border-bottom: 1px solid var(--border);
     display: grid;
-    grid-template-columns: 70px 80px 1fr 100px;
+    grid-template-columns: 70px 90px minmax(0,1fr) minmax(0,1.2fr);
     gap: 8px;
     align-items: center;
     animation: fadeIn 0.3s ease;
   }
+  .feed-item > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .feed-item a.tx-link { display: flex; gap: 4px; }
+  .feed-item a.tx-link .sig { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   @keyframes fadeIn { from{opacity:0;transform:translateX(-4px)} to{opacity:1;transform:none} }
   .feed-item:last-child { border-bottom: none; }
   .feed-time { color: var(--text3); }
@@ -1142,7 +1145,7 @@ async function fetchLiveFeed() {
       const div = document.createElement('div');
       div.className = 'feed-item';
       const item = items[i] || {label:'⚙️ tx', fee:0};
-      div.innerHTML = '<span class="feed-time">'+t+'</span><span class="feed-status'+(tx.err?' error':'')+'">'+item.label+err+'</span><span style="color:var(--text3);font-size:10px;margin-left:8px">'+(item.fee?((item.fee/1e9).toFixed(6)+' XNT'):'')+'</span><a class="tx-link" href="'+EXPLORER+'/tx/'+tx.signature+'" target="_blank">'+tx.signature.slice(0,20)+'... ↗</a>';
+      div.innerHTML = '<span class="feed-time">'+t+'</span><span class="feed-status'+(tx.err?' error':'')+'">'+item.label+err+'</span><span style="color:var(--text3);font-size:10px;margin-left:8px">'+(item.fee?((item.fee/1e9).toFixed(6)+' XNT'):'')+'</span><a class="tx-link" href="'+EXPLORER+'/tx/'+tx.signature+'" target="_blank"><span class="sig">'+tx.signature+'</span>↗</a>';
       div.classList.add('new');
       feed.insertBefore(div, feed.firstChild);
     });
