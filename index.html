@@ -520,9 +520,9 @@
         <div class="stat-sub">all time</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">Avg Fulfill Time</div>
-        <div class="stat-value">~4s</div>
-        <div class="stat-sub">WebSocket triggered</div>
+        <div class="stat-label">Network</div>
+        <div class="stat-value" style="font-size:18px">X1 mainnet</div>
+        <div class="stat-sub">upgrade in progress</div>
       </div>
     </div>
     <div class="section">
@@ -542,12 +542,10 @@
       <div class="section-body">
         <table class="data-table">
           <tbody>
-            <tr><td>Layer 1</td><td class="val">Physical quantum entropy</td><td>radioactive decay</td></tr>
-            <tr><td>Layer 2</td><td class="val">VDF time lock</td><td>5M iters ~15s</td></tr>
-            <tr><td>Layer 3</td><td class="val">Delayed SlotHash binding</td><td>100 future slots</td></tr>
-            <tr><td>Layer 4</td><td class="val">SHA256 chained pool</td><td>32-slot buffer</td></tr>
-            <tr><td>Layer 5</td><td class="val">User wallet pubkey mix</td><td>two-party security</td></tr>
-            <tr><td>Layer 6</td><td class="val">5 XNT slash mechanism</td><td>economic security</td></tr>
+            <tr><td>Entropy source</td><td class="val">Physical radioactive decay</td><td>GMC-500 Geiger counter</td></tr>
+            <tr><td>On-chain pool</td><td class="val">32-seed ring buffer</td><td>live on the Pool State tab</td></tr>
+            <tr><td>Request mixing</td><td class="val">Requester input mixed in</td><td>two-party</td></tr>
+            <tr><td>Node accountability</td><td class="val">XNT bonds + penalties</td><td>in design</td></tr>
           </tbody>
         </table>
       </div>
@@ -660,46 +658,48 @@
   <div class="tab-panel" id="tab-entropy">
     <div class="entropy-hero">
       <span class="entropy-symbol">ENTROPY</span>
-      <div class="entropy-tagline">proof of randomness · physical radioactive decay · on-chain verifiable</div>
+      <div class="entropy-tagline">the randomness utility token of GERO · mined by nodes · not yet launched</div>
     </div>
     <div class="stats-grid" style="grid-template-columns:repeat(3,1fr)">
       <div class="stat-card">
-        <div class="stat-label">Genesis Cycles</div>
+        <div class="stat-label">Hard Cap</div>
+        <div class="stat-value" style="font-size:20px">21,000,000</div>
+        <div class="stat-sub">fixed in the minter code</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Pre-mine</div>
+        <div class="stat-value" style="font-size:20px">none</div>
+        <div class="stat-sub">nobody holds a mint key</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Oracle Work So Far</div>
         <div class="stat-value" id="entropy-cycles">—</div>
-        <div class="stat-sub">seq 0 → now</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Emission Model</div>
-        <div class="stat-value" style="font-size:18px">1 : 1</div>
-        <div class="stat-sub">per finalize cycle</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Total Fulfilled</div>
-        <div class="stat-value" id="entropy-fulfilled">—</div>
-        <div class="stat-sub">airdrop basis</div>
+        <div class="stat-sub">pool submissions on mainnet</div>
       </div>
     </div>
     <div class="section">
-      <div class="section-header"><span class="section-title">Tokenomics — flywheel design</span></div>
+      <div class="section-header"><span class="section-title">Token design</span></div>
       <div class="section-body">
         <table class="data-table">
           <tbody>
-            <tr><td>Emission</td><td class="val">1 ENTROPY per finalize cycle</td><td>proof of randomness work</td></tr>
-            <tr><td>Demand driver</td><td class="val">Game requires ENTROPY to play</td><td>burns per action</td></tr>
-            <tr><td>Supply control</td><td class="val">More demand → more cycles → more supply</td><td>self-balancing</td></tr>
-            <tr><td>Genesis airdrop</td><td class="val">All cycles seq 0 → current</td><td>retroactive reward</td></tr>
-            <tr><td>Slash in ENTROPY</td><td class="val">Planned — Phase 5</td><td>replaces XNT slash</td></tr>
-            <tr><td>Governance</td><td class="val">Planned — Phase 5</td><td>protocol parameters</td></tr>
+            <tr><td>Supply</td><td class="val">21,000,000 hard cap</td><td>genesis counted inside the cap</td></tr>
+            <tr><td>Distribution</td><td class="val">Mined by oracle nodes</td><td>no sale, no pre-mine</td></tr>
+            <tr><td>Mint authority</td><td class="val">Program-controlled (PDA)</td><td>immutable minter after audit</td></tr>
+            <tr><td>Genesis operator allocation</td><td class="val">5% · 1,050,000 ENTROPY</td><td>~1 year of solo mainnet operation</td></tr>
+            <tr><td>Launch pool</td><td class="val">1,050,000 ENTROPY + 1,000 XNT</td><td>Forge Swap</td></tr>
+            <tr><td>Launch LP</td><td class="val">60% burned · 40% locked 12 months</td><td>public timelock</td></tr>
+            <tr><td>Node bonds</td><td class="val">XNT</td><td>never ENTROPY</td></tr>
+            <tr><td>Launch condition</td><td class="val">2–3 independent nodes live</td><td>before any emission</td></tr>
           </tbody>
         </table>
       </div>
     </div>
     <div class="section">
-      <div class="section-header"><span class="section-title">Flywheel</span></div>
+      <div class="section-header"><span class="section-title">Planned uses</span></div>
       <div class="section-body" style="font-family:var(--mono);font-size:12px;color:var(--text2);line-height:2">
-        Players need ENTROPY → game calls randomness → oracle cycles speed up → ENTROPY emitted → more ENTROPY → more players → more demand → faster oracle → more ENTROPY
+        Oracle fees payable in ENTROPY at a discount · Forge Launch mint randomness · ENTROPY/XNT farm on Forge Farms · Shardforge loot and crafting rolls · marketplace raffles · oracle governance later
         <br><br>
-        <span style="color:var(--text3)">The token supply is physically tied to real radioactive decay events. More demand = more Geiger clicks = more entropy = more ENTROPY token. Supply cannot be faked or inflated without a physical radioactive source.</span>
+        <span style="color:var(--text3)">ENTROPY is not live. Nothing here is an offer or a promise of value. The emission schedule and minter program will be published and audited before launch.</span>
       </div>
     </div>
   </div>
@@ -726,29 +726,29 @@
         <div class="roadmap-item">
           <div class="roadmap-num done">03</div>
           <div class="roadmap-content">
-            <div class="roadmap-title">Randomness fulfillment — 4s end-to-end <span class="roadmap-badge done">LIVE</span></div>
-            <div class="roadmap-desc">WebSocket trigger · fulfill_randomness · user wallet pubkey mixing · two-party security · ~4s total</div>
+            <div class="roadmap-title">Randomness fulfillment <span class="roadmap-badge done">LIVE</span></div>
+            <div class="roadmap-desc">fulfill_randomness · requester input mixing · serving RISE Phoenix mints on mainnet</div>
           </div>
         </div>
         <div class="roadmap-item">
           <div class="roadmap-num active">04</div>
           <div class="roadmap-content">
-            <div class="roadmap-title">Dynamic sleep auto-tuning <span class="roadmap-badge building">BUILDING</span></div>
-            <div class="roadmap-desc">daemon reads pending requests · adjusts sleep 3600s → 60s → 0s based on demand · no restart needed</div>
+            <div class="roadmap-title">Next-gen oracle build <span class="roadmap-badge done">LIVE ON TESTNET</span></div>
+            <div class="roadmap-desc">running on X1 testnet since September 2026 · mainnet upgrade next, with program authority moving to a hardware wallet · details published later</div>
           </div>
         </div>
         <div class="roadmap-item">
           <div class="roadmap-num">05</div>
           <div class="roadmap-content">
             <div class="roadmap-title">ENTROPY Token <span class="roadmap-badge planned">PLANNED</span></div>
-            <div class="roadmap-desc">proof of randomness · 1 ENTROPY per cycle · retroactive genesis airdrop · game integration · staking · governance</div>
+            <div class="roadmap-desc">21M hard cap · mined by nodes · genesis operator allocation 5% · immutable audited minter · launches with 2–3 independent nodes</div>
           </div>
         </div>
         <div class="roadmap-item">
           <div class="roadmap-num">06</div>
           <div class="roadmap-content">
             <div class="roadmap-title">Multi-node <span class="roadmap-badge planned">PLANNED</span></div>
-            <div class="roadmap-desc">3+ independent Geiger nodes · XOR entropy combining · no single operator control · 3x throughput</div>
+            <div class="roadmap-desc">2–3 independent Geiger nodes · XNT node bonds · no single operator control · required before ENTROPY launches</div>
           </div>
         </div>
         <div class="roadmap-item">
@@ -764,7 +764,7 @@
 
   <footer>
     <p style="font-size:10px;color:var(--muted);margin-bottom:8px;max-width:800px;line-height:1.5;">⚠️ <strong>Disclaimer:</strong> GERO is a cryptographic randomness oracle providing infrastructure services only. Echo Hound Labs does not operate, endorse, or participate in any gambling, lottery, or chance-based application. Developers integrating GERO are solely responsible for compliance with applicable laws. Use at your own risk.</p>
-    <p>echohound-labs · geiger-entropy-oracle · X1 mainnet · v6</p>
+    <p>echohound-labs · geiger-entropy-oracle · X1 mainnet · next-gen build on testnet</p>
     <button class="refresh-btn" onclick="fetchAll()">↻ refresh</button>
   </footer>
 
