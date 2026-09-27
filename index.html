@@ -492,10 +492,10 @@
       <div class="section-body">
         <table class="data-table nodes-table">
           <thead>
-            <tr><th>status</th><th>node</th><th>submissions</th><th>last seen</th><th>reputation</th></tr>
+            <tr><th>status</th><th>node</th><th>submissions</th><th>last seen</th><th>reputation</th><th>approved</th></tr>
           </thead>
           <tbody id="nodes-list">
-            <tr><td colspan="5"><span class="loading">loading</span></td></tr>
+            <tr><td colspan="6"><span class="loading">loading</span></td></tr>
           </tbody>
         </table>
       </div>
@@ -818,6 +818,8 @@ const RPC = '/api/rpc';
 const PROGRAM_ID = 'BxUNg2yo5371BQMZPkfcxdCptFRDHkhvEXNM1QNPBRYU';
 const ORACLE_STATE = 'BygMTZ1oLBD9tDmssnt9LkNT7BEd2PCJBCzurwtMuTqm';
 const ENTROPY_POOL = 'GDECYXCXietabJs9Y1baKzD3t4VFBw4eZWPnvYenyi77';
+// Anchor account discriminators (first 8 bytes, base58) for getProgramAccounts memcmp filters
+const DISC_ENTROPY_NODE = 'AgqNVQJwzA7';
 const OPERATOR = 'HGFisVbULNKqogtPuGTfcHG9y6i5nboZabYwifkiiodo';
 const EXPLORER = 'https://explorer.x1.xyz';
 const XNT_VAULT_XNT  = '8wvV4HKBDFMLEUkVWp1WPNa5ano99XCm3f9t3troyLb';
@@ -915,7 +917,7 @@ async function fetchAll() {
       rpc('getAccountInfo',[ENTROPY_POOL,{encoding:'base64'}]).catch(e=>null),
       rpc('getProgramAccounts',[PROGRAM_ID,{filters:[{dataSize:122}],encoding:'base64'}]).catch(e=>null),
       rpc('getBalance',[OPERATOR]).catch(e=>null),
-      rpc('getProgramAccounts',[PROGRAM_ID,{filters:[{dataSize:167}],encoding:'base64'}]).catch(e=>null)
+      rpc('getProgramAccounts',[PROGRAM_ID,{filters:[{memcmp:{offset:0,bytes:DISC_ENTROPY_NODE}}],encoding:'base64'}]).catch(e=>null)
     ]);
 
     if (!oracleRes?.value) throw new Error('oracle state not found');
@@ -939,8 +941,9 @@ async function fetchAll() {
 
     const balanceXNT=(((balRes?.value ?? balRes) || 0)/1e9).toFixed(2);
 
-    // EntropyNode accounts: dataSize=167
-    // disc(8)+operator(32)+node_pubkey(32)+name(4+N)+submissions(8)+reputation(1)+active(1)+registered_at(8)+last_submission(8)+bump(1)
+    // EntropyNode accounts, matched by discriminator (pre-v7.1 = 167 bytes, v8.1 = 168 bytes)
+    // disc(8)+operator(32)+node_pubkey(32)+name(4+N)+submissions(8)+reputation(1)+active(1)+registered_at(8)+last_submission(8)+bump(1)+approved(1)
+    // approved sits right after bump; older accounts read it from zero padding (= false)
     const nowSec=Math.floor(Date.now()/1000);
     const allNodes=(nodesRes||[]).map(a=>{
       try {
@@ -953,7 +956,8 @@ async function fetchAll() {
         let lastSub=0n; for(let i=0;i<8;i++) lastSub|=BigInt(d[base+18+i])<<BigInt(8*i);
         const secsAgo=nowSec-Number(lastSub);
         const online=secsAgo<ONLINE_THRESHOLD;
-        return {pubkey:a.pubkey,submissions:Number(subs),reputation,active:activeFlag,secsAgo,online};
+        const approved=d.length>base+27 && d[base+27]===1;
+        return {pubkey:a.pubkey,submissions:Number(subs),reputation,active:activeFlag,approved,secsAgo,online};
       } catch(e){return null;}
     }).filter(Boolean).sort((a,b)=>b.submissions-a.submissions);
 
@@ -988,8 +992,8 @@ async function fetchAll() {
         const ago=n.secsAgo<3600?Math.round(n.secsAgo/60)+' min ago':n.secsAgo<86400?Math.round(n.secsAgo/3600)+' hrs ago':Math.round(n.secsAgo/86400)+' days ago';
         const col=n.online?'var(--green)':'var(--red)';
         const status=n.online?'● ONLINE':'○ OFFLINE';
-        return '<tr><td><span style="color:'+col+';font-family:var(--mono);font-size:11px">'+status+'</span></td><td class="val">'+n.pubkey.slice(0,16)+'...</td><td class="val">'+fmt(n.submissions)+'</td><td style="color:var(--text3)">'+ago+'</td><td style="color:var(--text3)">'+n.reputation+'/100</td></tr>';
-      }).join('') || '<tr><td colspan="5" style="color:var(--text3)">no registered nodes found</td></tr>';
+        return '<tr><td><span style="color:'+col+';font-family:var(--mono);font-size:11px">'+status+'</span></td><td class="val">'+n.pubkey.slice(0,16)+'...</td><td class="val">'+fmt(n.submissions)+'</td><td style="color:var(--text3)">'+ago+'</td><td style="color:var(--text3)">'+n.reputation+'/100</td><td style="color:'+(n.approved?'var(--green)':'var(--text3)')+';font-family:var(--mono);font-size:11px">'+(n.approved?'yes':'no')+'</td></tr>';
+      }).join('') || '<tr><td colspan="6" style="color:var(--text3)">no registered nodes found</td></tr>';
     }
 
     // Pool
