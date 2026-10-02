@@ -786,6 +786,10 @@ async function fetchXntPrice() {
   } catch(e) {}
 }
 const ONLINE_THRESHOLD = 3600;
+// measured X1 mainnet average slot time, seconds
+const SLOT_S = 0.3675;
+// on-chain pool-age bound in slots: fulfil is refused once the pool is older (read from OracleState; 1500 if unreadable)
+let _maxPoolAgeSlots = 1500;
 
 async function rpc(method, params) {
   const r = await fetch(RPC, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method,params})});
@@ -857,12 +861,13 @@ async function fetchAll() {
     ]);
 
     if (!oracleRes?.value) throw new Error('oracle state not found');
-    // OracleState (v8.1, 98 bytes): disc(8)+authority(32)+total_nodes(8)+total_requests(8)+total_fulfillments(8)+paused(1)+bump(1)+appended fields (not read here)
+    // OracleState (v8.1, 98 bytes): disc(8)+authority(32)+total_nodes(8)+total_requests(8)+total_fulfillments(8)+paused(1)+bump(1)+appended fields
     const oraw=decode(oracleRes.value.data[0]);
     const totalNodes=u64(oraw,40);
     const totalRequests=u64(oraw,48);
     const totalFulfillments=u64(oraw,56);
     const paused=oraw[64]===1;
+    if (oraw.length>=74) { _maxPoolAgeSlots=u64(oraw,66); updatePoolFreshness(); }
 
     // EntropyPool (v8.1, 1305 bytes): disc(8)+seeds(1024)+head(8)+total_submissions(8)+bump(1)+appended fields (not read here)
     const praw = poolRes?.value ? decode(poolRes.value.data[0]) : null;
@@ -1005,11 +1010,12 @@ function updatePoolFreshness() {
   const sub = document.getElementById('stat-freshness-sub');
   if (!el || !_lastFinalizeTime) return;
   const age = (Date.now() - _lastFinalizeTime) / 1000 / 60;
-  if (age > 30) {
+  const boundMin = _maxPoolAgeSlots * SLOT_S / 60;
+  if (age > boundMin) {
     el.textContent = '🔴 STALE';
     el.style.color = '#ff4444';
-    sub.textContent = age.toFixed(0) + ' min ago — fulfillments paused';
-  } else if (age > 15) {
+    sub.textContent = age.toFixed(0) + ' min ago — fulfillments refused';
+  } else if (age > boundMin / 2) {
     el.textContent = '🟡 WARNING';
     el.style.color = '#ffaa00';
     sub.textContent = age.toFixed(0) + ' min ago';
