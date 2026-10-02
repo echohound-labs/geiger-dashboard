@@ -324,21 +324,6 @@
   .tier-sleep { color: var(--green); min-width: 60px; }
   .tier-label { color: var(--text3); font-size: 10px; letter-spacing: 0.08em; }
 
-  /* Entropy token section */
-  .entropy-hero {
-    text-align: center; padding: 32px;
-    background: var(--bg3); border-radius: 8px;
-    border: 1px solid var(--border);
-    margin-bottom: 16px;
-  }
-  .entropy-symbol {
-    font-family: var(--mono); font-size: 48px;
-    color: var(--green); letter-spacing: 0.1em;
-    display: block; margin-bottom: 8px;
-    text-shadow: 0 0 40px rgba(0,255,100,0.3);
-  }
-  .entropy-tagline { font-size: 12px; color: var(--text3); font-family: var(--mono); letter-spacing: 0.06em; }
-
   /* Pending requests */
   .pending-item {
     font-family: var(--mono); font-size: 11px;
@@ -409,7 +394,6 @@
     <button onclick="showTab('requests')">Randomness</button>
     <button onclick="showTab('autotune')">Auto-tune</button>
     <button onclick="showTab('cost')">Cost Estimator</button>
-    <button onclick="showTab('entropy')">ENTROPY Token</button>
     <button onclick="showTab('roadmap')">Roadmap</button>
   </nav>
 
@@ -696,56 +680,6 @@
     </div>
   </div>
 
-  <!-- ENTROPY TOKEN TAB -->
-  <div class="tab-panel" id="tab-entropy">
-    <div class="entropy-hero">
-      <span class="entropy-symbol">ENTROPY</span>
-      <div class="entropy-tagline">the randomness utility token of GERO · mined by nodes · not yet launched</div>
-    </div>
-    <div class="stats-grid" style="grid-template-columns:repeat(3,1fr)">
-      <div class="stat-card">
-        <div class="stat-label">Hard Cap</div>
-        <div class="stat-value" style="font-size:20px">21,000,000</div>
-        <div class="stat-sub">fixed in the minter code</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Pre-mine</div>
-        <div class="stat-value" style="font-size:20px">none</div>
-        <div class="stat-sub">nobody holds a mint key</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Oracle Work So Far</div>
-        <div class="stat-value" id="entropy-cycles">—</div>
-        <div class="stat-sub">pool submissions on mainnet</div>
-      </div>
-    </div>
-    <div class="section">
-      <div class="section-header"><span class="section-title">Token design</span></div>
-      <div class="section-body">
-        <table class="data-table">
-          <tbody>
-            <tr><td>Supply</td><td class="val">21,000,000 hard cap</td><td>genesis counted inside the cap</td></tr>
-            <tr><td>Distribution</td><td class="val">Mined by oracle nodes</td><td>no sale, no pre-mine</td></tr>
-            <tr><td>Mint authority</td><td class="val">Program-controlled (PDA)</td><td>immutable minter after audit</td></tr>
-            <tr><td>Genesis operator allocation</td><td class="val">5% · 1,050,000 ENTROPY</td><td>~1 year of solo mainnet operation</td></tr>
-            <tr><td>Launch pool</td><td class="val">1,050,000 ENTROPY + 1,000 XNT</td><td>Forge Swap</td></tr>
-            <tr><td>Launch LP</td><td class="val">60% burned · 40% locked 12 months</td><td>public timelock</td></tr>
-            <tr><td>Node bonds</td><td class="val">XNT</td><td>never ENTROPY</td></tr>
-            <tr><td>Launch condition</td><td class="val">2–3 independent nodes live</td><td>before any emission</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-    <div class="section">
-      <div class="section-header"><span class="section-title">Planned uses</span></div>
-      <div class="section-body" style="font-family:var(--mono);font-size:12px;color:var(--text2);line-height:2">
-        Oracle fees payable in ENTROPY at a discount · Forge Launch mint randomness · ENTROPY/XNT farm on Forge Farms · Shardforge loot and crafting rolls · marketplace raffles · oracle governance later
-        <br><br>
-        <span style="color:var(--text3)">ENTROPY is not live. Nothing here is an offer or a promise of value. The emission schedule and minter program will be published and audited before launch.</span>
-      </div>
-    </div>
-  </div>
-
   <!-- ROADMAP TAB -->
   <div class="tab-panel" id="tab-roadmap">
     <div class="section">
@@ -782,19 +716,12 @@
         <div class="roadmap-item">
           <div class="roadmap-num">05</div>
           <div class="roadmap-content">
-            <div class="roadmap-title">ENTROPY Token <span class="roadmap-badge planned">PLANNED</span></div>
-            <div class="roadmap-desc">21M hard cap · mined by nodes · genesis operator allocation 5% · immutable audited minter · launches with 2–3 independent nodes</div>
+            <div class="roadmap-title">Multi-node <span class="roadmap-badge planned">PLANNED</span></div>
+            <div class="roadmap-desc">2–3 independent Geiger nodes · XNT node bonds · no single operator control</div>
           </div>
         </div>
         <div class="roadmap-item">
           <div class="roadmap-num">06</div>
-          <div class="roadmap-content">
-            <div class="roadmap-title">Multi-node <span class="roadmap-badge planned">PLANNED</span></div>
-            <div class="roadmap-desc">2–3 independent Geiger nodes · XNT node bonds · no single operator control · required before ENTROPY launches</div>
-          </div>
-        </div>
-        <div class="roadmap-item">
-          <div class="roadmap-num">07</div>
           <div class="roadmap-content">
             <div class="roadmap-title">Game integration <span class="roadmap-badge planned">PLANNED</span></div>
             <div class="roadmap-desc">session keys · pre-fulfilled queue · on-chain game logic · sub-second randomness for rapid calls</div>
@@ -1061,10 +988,6 @@ async function fetchAll() {
     else if(pendingCount>0) rec='300s (low demand)';
     const atp=document.getElementById('autotune-pending'); if(atp) atp.textContent=pendingCount;
     const atr=document.getElementById('autotune-recommended'); if(atr) atr.textContent=rec;
-
-    // ENTROPY tab
-    const ec=document.getElementById('entropy-cycles'); if(ec) ec.textContent=fmt(totalSubmissions);
-    const ef=document.getElementById('entropy-fulfilled'); if(ef) ef.textContent=fmt(totalFulfillments);
 
     document.getElementById('last-update').textContent=new Date().toLocaleTimeString();
   } catch(e) {
