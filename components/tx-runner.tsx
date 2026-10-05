@@ -29,19 +29,23 @@ const btnOn = `${btn} border-term-green/50 text-term-green hover:bg-term-green/1
 const btnOff = `${btn} cursor-not-allowed border-term-line text-term-text3`;
 
 /**
- * One write action: Simulate → (show result) → Sign and send → confirm.
+ * One write action: Simulate → (show result) → Confirm in wallet → confirm.
  * The sign button exists only after a successful simulation of the exact
  * transaction that will be signed.
  */
 export function TxRunner<C>({
-  name,
+  label,
+  hint,
   cuLimit,
   disabledReason,
   prepare,
   describe,
   onDone,
 }: {
-  name: string;
+  /** First button: starts the simulation. Plain words; technical names belong in the caller's explanatory text. */
+  label: string;
+  /** Small helper text under the first button. */
+  hint?: string;
   cuLimit: number;
   /** Non-null keeps the action disabled and shows the reason. */
   disabledReason: string | null;
@@ -107,10 +111,11 @@ export function TxRunner<C>({
           onClick={runSimulation}
           title={blocked ?? undefined}
         >
-          {step.kind === "simulating" ? `Simulating ${name}…` : `Simulate ${name}`}
+          {step.kind === "simulating" ? "Checking the transaction…" : label}
         </button>
         {blocked && <span className="font-mono text-xs text-term-text3">{blocked}</span>}
       </div>
+      {hint && <p className="mt-1.5 font-mono text-xs text-term-text3">{hint}</p>}
 
       {shown && (
         <div className="mt-3 space-y-2 font-mono text-xs">
@@ -132,7 +137,7 @@ export function TxRunner<C>({
                 disabled={busy}
                 onClick={() => runSend(shown.built, shown.sim, shown.ctx)}
               >
-                {step.kind === "signing" ? "Waiting for the wallet…" : step.kind === "sending" ? "Sending and confirming…" : `Sign and send ${name}`}
+                {step.kind === "signing" ? "Waiting for the wallet…" : step.kind === "sending" ? "Sending and confirming…" : "Confirm in wallet"}
               </button>
             ) : null}
             <button type="button" className={busy ? btnOff : `${btn} border-term-line text-term-text2`} disabled={busy} onClick={() => setStep({ kind: "idle" })}>

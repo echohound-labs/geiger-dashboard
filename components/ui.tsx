@@ -17,10 +17,28 @@ export function PageTitle({ title, network, sub, right }: { title: string; netwo
   );
 }
 
-export function Panel({ title, children, note, className = "" }: { title?: string; children: ReactNode; note?: ReactNode; className?: string }) {
+export function Panel({
+  title,
+  tag,
+  children,
+  note,
+  className = "",
+}: {
+  title?: string;
+  /** Shown next to the title, e.g. a network badge. */
+  tag?: ReactNode;
+  children: ReactNode;
+  note?: ReactNode;
+  className?: string;
+}) {
   return (
     <section className={`rounded-md border border-term-line bg-term-panel p-4 ${className}`}>
-      {title && <h2 className="mb-3 font-mono text-xs uppercase tracking-[0.14em] text-term-text2">{title}</h2>}
+      {title && (
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <h2 className="font-mono text-xs uppercase tracking-[0.14em] text-term-text2">{title}</h2>
+          {tag}
+        </div>
+      )}
       {children}
       {note && <p className="mt-3 text-xs leading-relaxed text-term-text3">{note}</p>}
     </section>

@@ -143,6 +143,7 @@ export function MyNodePanel() {
       </Panel>
       <Panel
         title="Actions"
+        tag={NETWORK.name === "testnet" ? <Badge tone="warn">{NETWORK.label}</Badge> : undefined}
         note="Each action is simulated first; the result is shown before the wallet is asked to sign, and nothing is sent unless the simulation succeeded."
       >
         <div className="space-y-3">
@@ -170,7 +171,7 @@ export function MyNodePanel() {
                 transaction fee. The minter never closes a claim account, so the rent stays in it.
               </p>
               <TxRunner
-                name="open_claim"
+                label={`Open claim account (one-time, ${claimRent === null ? "…" : xnt(BigInt(claimRent))})`}
                 cuLimit={CU.open_claim}
                 disabledReason={null}
                 prepare={async () => ({
@@ -213,7 +214,8 @@ export function MyNodePanel() {
                 . If that account does not exist yet it is created in the same transaction and the wallet pays its rent.
               </p>
               <TxRunner
-                name="claim"
+                label={`Claim ${amount(c.accrued).replace(/\.?0+$/, "")} ${NETWORK.symbol}`}
+                hint="Checks the transaction first, then asks your wallet to sign."
                 cuLimit={CU.claim}
                 disabledReason={null}
                 prepare={async () => {
