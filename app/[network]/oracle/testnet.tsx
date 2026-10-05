@@ -4,16 +4,14 @@ import { getNetworkView, type NetworkView } from "@/lib/chain";
 import { NETWORK } from "@/lib/config";
 import { int, linesToDuration } from "@/lib/format";
 
-export const dynamic = "force-dynamic";
-
-export default async function NetworkPage() {
+export async function TestnetOracle() {
   let v: NetworkView;
   try {
     v = await getNetworkView();
   } catch (e) {
     return (
       <>
-        <PageTitle title="Network" network="testnet" />
+        <PageTitle title="Oracle status" network="testnet" />
         <ErrorPanel error={e} />
       </>
     );
@@ -24,7 +22,7 @@ export default async function NetworkPage() {
     <>
       <PageTitle
         network="testnet"
-        title="Network"
+        title="Oracle status"
         sub="GERO v9.1b, the next version, in testing on X1 testnet: status read from OracleState and the on-chain line record (LineLog)."
         right={<AutoRefresh renderedAt={Date.now()} />}
       />
@@ -93,12 +91,6 @@ export default async function NetworkPage() {
               ["Settled and paid by the minter (all time)", v.linesPaidSettled === null ? "minter not initialized" : int(v.linesPaidSettled)],
             ]}
           />
-        </Panel>
-      </div>
-
-      <div className="mt-3">
-        <Panel title="Integrations" note="Placeholder. Consumers that request randomness from GERO will be listed here.">
-          <p className="font-mono text-sm text-term-text3">No integrations listed yet.</p>
         </Panel>
       </div>
     </>

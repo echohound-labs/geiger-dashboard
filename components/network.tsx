@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { MAINNET_ORACLE, TESTNET } from "@/lib/config";
 
 export type Net = "mainnet" | "testnet" | "both";
@@ -34,5 +35,25 @@ export function EntropyBanner() {
     >
       tENTROPY is a test token with no value. ENTROPY is not launched on mainnet.
     </div>
+  );
+}
+
+/** ENTROPY pages on mainnet: nothing to read yet, so point to the same page on testnet. */
+export function NotOnMainnet({ title, testnetHref }: { title: string; testnetHref: string }) {
+  return (
+    <>
+      <div className="mb-6">
+        <div className="mb-2">
+          <NetworkLabel net="mainnet" />
+        </div>
+        <h1 className="font-mono text-2xl tracking-wide text-term-green">{title}</h1>
+      </div>
+      <div className="rounded-md border border-term-lineStrong bg-term-panel p-5">
+        <p className="text-[15px] text-term-text">ENTROPY is not launched on mainnet yet.</p>
+        <Link href={testnetHref} className="mt-3 inline-block font-mono text-sm text-term-green underline">
+          Try it on Testnet →
+        </Link>
+      </div>
+    </>
   );
 }

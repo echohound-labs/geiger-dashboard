@@ -5,30 +5,29 @@ import { usePathname } from "next/navigation";
 import { ThemeToggle } from "./theme";
 
 const GROUPS = [
-  { tag: "Mainnet", tone: "text-term-green", items: [{ href: "/", label: "Oracle" }] },
+  { tag: "Mainnet", tone: "text-term-green", items: [{ href: "/mainnet/oracle", label: "Oracle" }] },
   {
     tag: "Testnet",
     tone: "text-term-amber",
     items: [
-      { href: "/testnet", label: "Network" },
+      { href: "/testnet/oracle", label: "Oracle" },
       { href: "/testnet/nodes", label: "Nodes" },
       { href: "/testnet/entropy", label: "ENTROPY" },
-      { href: "/testnet/my-node", label: "My node" },
+      { href: "/testnet/claim", label: "Claim" },
       { href: "/testnet/activity", label: "Activity" },
     ],
   },
-  { tag: null, tone: "", items: [{ href: "/about", label: "About" }] },
+  { tag: null, tone: "", items: [{ href: "/learn/how-it-works", label: "How it works" }] },
 ];
 
-// "/" and "/testnet" have child routes, so they match exactly.
-const EXACT = new Set(["/", "/testnet"]);
+const EXACT = new Set<string>();
 
 export function SiteHeader() {
   const path = usePathname();
   return (
     <header className="border-b border-term-line bg-term-panel/60">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3 sm:px-6">
-        <Link href="/" className="font-mono text-lg tracking-widest text-term-green">
+        <Link href="/mainnet/oracle" className="font-mono text-lg tracking-widest text-term-green">
           GERO<span className="text-term-text2">/hub</span>
         </Link>
         <nav className="-mx-1 flex w-full items-center gap-1 overflow-x-auto lg:w-auto lg:flex-1">

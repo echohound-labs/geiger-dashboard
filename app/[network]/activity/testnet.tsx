@@ -10,14 +10,11 @@ import {
 import { NETWORK } from "@/lib/config";
 import { amount, int, short, timeAgo, utc } from "@/lib/format";
 
-export const dynamic = "force-dynamic";
-export const metadata = { title: "Activity" };
-
 function mask(m: number): string {
   return m.toString(2).padStart(8, "0").split("").reverse().join("");
 }
 
-export default async function ActivityPage() {
+export async function TestnetActivity() {
   let v: ActivityView;
   try {
     v = await getActivityView();

@@ -112,3 +112,6 @@ export const LOADER_V3 = "BPFLoaderUpgradeab1e11111111111111111111111";
  * counts into approximate durations; every schedule figure is in lines/slots.
  */
 export const MEASURED_SLOT_SECONDS = 0.3675;
+
+/** Public ENTROPY white paper, served from public/. It carries the "Public for testnet testing" header. */
+export const WHITE_PAPER_URL = "/ENTROPY_WHITEPAPER_v0.1.pdf";

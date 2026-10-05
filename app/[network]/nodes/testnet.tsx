@@ -4,12 +4,9 @@ import { PAYOUT_DELAY_SLOTS, getNodesView, type NodeStatus, type NodesView } fro
 import { NETWORK } from "@/lib/config";
 import { amount, int, linesToDuration, pct, slotsToDuration, xnt } from "@/lib/format";
 
-export const dynamic = "force-dynamic";
-export const metadata = { title: "Nodes" };
-
 const statusTone: Record<NodeStatus, Tone> = { active: "good", shadow: "warn", offline: "bad" };
 
-export default async function NodesPage() {
+export async function TestnetNodes() {
   let v: NodesView;
   try {
     v = await getNodesView();

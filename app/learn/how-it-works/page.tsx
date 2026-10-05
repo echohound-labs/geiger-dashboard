@@ -1,19 +1,16 @@
 import { EntropyBanner } from "@/components/network";
 import { PageTitle, Panel, Table } from "@/components/ui";
-import { MAINNET_ORACLE, TESTNET } from "@/lib/config";
+import { MAINNET_ORACLE, TESTNET, WHITE_PAPER_URL } from "@/lib/config";
 
-/** Public white paper, served from public/. It carries the "Public for testnet testing" header. */
-const WHITE_PAPER = "/ENTROPY_WHITEPAPER_v0.1.pdf";
-
-export const metadata = { title: "About" };
+export const metadata = { title: "How it works" };
 
 // Content ceiling: ENTROPY_WHITEPAPER_v0.1.md. Nothing here goes beyond what the
 // white paper states; figures are copied from it.
 
-export default function AboutPage() {
+export default function HowItWorksPage() {
   return (
     <>
-      <PageTitle title="About" network="both" sub="What GERO and ENTROPY are, at the level of the white paper (v0.1, draft)." />
+      <PageTitle title="How it works" network="both" sub="What GERO and ENTROPY are, at the level of the white paper (v0.1, draft)." />
 
       <EntropyBanner />
 
@@ -32,7 +29,7 @@ export default function AboutPage() {
         <Panel title="Networks">
           <p>
             <span className="font-mono text-term-green">{MAINNET_ORACLE.label}</span> runs GERO {MAINNET_ORACLE.version}, the
-            live oracle. The Oracle page shows its requests, nodes, pool freshness and recent transactions. ENTROPY is not
+            live oracle. The Mainnet pages show its requests, nodes, pool freshness and recent transactions. ENTROPY is not
             launched on mainnet.
           </p>
           <p className="mt-3">
@@ -44,7 +41,7 @@ export default function AboutPage() {
 
         <Panel title="White paper">
           <p>
-            <a className="text-term-green underline" href={WHITE_PAPER} target="_blank" rel="noreferrer">
+            <a className="text-term-green underline" href={WHITE_PAPER_URL} target="_blank" rel="noreferrer">
               ENTROPY white paper v0.1 (PDF)
             </a>
             . A draft, public for testnet testing; mainnet not launched. Parameters may be revised before deployment.
@@ -118,8 +115,8 @@ export default function AboutPage() {
 
         <Panel title="This hub">
           <p>
-            Every figure is read from chain accounts on each page load: {MAINNET_ORACLE.label} for the Oracle page,{" "}
-            {TESTNET.label} for the Testnet pages. On {TESTNET.label} the My node page can open a claim account and claim{" "}
+            Every figure is read from chain accounts on each page load: {MAINNET_ORACLE.label} for the Mainnet pages,{" "}
+            {TESTNET.label} for the Testnet pages. On {TESTNET.label} the Claim page can open a claim account and claim{" "}
             {TESTNET.symbol}; each transaction is simulated and shown before the wallet signs. Transactions stay disabled on
             mainnet before launch.
           </p>

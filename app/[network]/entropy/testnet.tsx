@@ -5,12 +5,9 @@ import { NETWORK } from "@/lib/config";
 import { amount, amountShort, int, linesToDuration } from "@/lib/format";
 import { CAP, GENESIS, SETTLE_DELAY } from "@/lib/schedule";
 
-export const dynamic = "force-dynamic";
-export const metadata = { title: "ENTROPY" };
-
 const checkTone: Record<CheckStatus, Tone> = { PASS: "good", WARN: "warn", FAIL: "bad" };
 
-export default async function EntropyPage() {
+export async function TestnetEntropy() {
   let v: EntropyView;
   try {
     v = await getEntropyView();
