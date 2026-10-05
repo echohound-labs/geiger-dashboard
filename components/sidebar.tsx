@@ -8,7 +8,6 @@ import {
   ActivityIcon, BookIcon, ChevronsLeft, ChevronsRight, CloseIcon, CoinIcon, CompassIcon, FileIcon, HelpIcon, MenuIcon,
   NodesIcon, PlugIcon, RadarIcon, WalletIcon, type Icon,
 } from "./icons";
-import { WHITE_PAPER_URL } from "@/lib/config";
 import { NETS, isNet, netFromPath, switchNetPath, type NetSlug } from "@/lib/networks";
 import { SIDEBAR_KEY } from "@/lib/theme-script";
 
@@ -41,7 +40,7 @@ function sections(net: NetSlug): Section[] {
       items: [
         { label: "How it works", Icon: BookIcon, href: "/learn/how-it-works" },
         { label: "How to test", Icon: HelpIcon, href: "/learn/how-to-test" },
-        { label: "White paper", Icon: FileIcon, href: WHITE_PAPER_URL, external: true },
+        { label: "White paper", Icon: FileIcon, href: "/learn/white-paper" },
       ],
     },
   ];

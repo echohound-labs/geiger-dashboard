@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { EntropyBanner } from "@/components/network";
 import { PageTitle, Panel, Table } from "@/components/ui";
-import { MAINNET_ORACLE, TESTNET, WHITE_PAPER_URL } from "@/lib/config";
+import { MAINNET_ORACLE, TESTNET } from "@/lib/config";
 
 export const metadata = { title: "How it works" };
 
@@ -159,9 +159,9 @@ export default function HowItWorksPage() {
 
         <p className="text-sm text-term-text2">
           Full details, figures and risks are in the{" "}
-          <a className={link} href={WHITE_PAPER_URL} target="_blank" rel="noreferrer">
-            white paper (PDF)
-          </a>
+          <Link className={link} href="/learn/white-paper">
+            white paper
+          </Link>
           .
         </p>
       </div>
