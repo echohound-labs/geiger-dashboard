@@ -2,10 +2,10 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { Badge, Dot, ErrorPanel, KV, PageTitle, Panel, type Tone } from "@/components/ui";
-import { getEntropyView, getNetworkView } from "@/lib/chain";
-import { MAINNET_ORACLE, TESTNET, WHITE_PAPER_URL } from "@/lib/config";
-import { amount, amountShort, int, linesToDuration } from "@/lib/format";
-import { freshnessOf, getMainnetFeed, getMainnetNodes, getMainnetOracle, type Freshness } from "@/lib/mainnet";
+import { getEntropyView, getNetworkView, getRecentEvents } from "@/lib/chain";
+import { MAINNET_ORACLE, TESTNET, WHITE_PAPER_URL, explorerAddress, explorerTx, mainnetTx } from "@/lib/config";
+import { amount, amountShort, int, linesToDuration, short, timeAgo, utc } from "@/lib/format";
+import { freshnessOf, getMainnetFeed, getMainnetNodes, getMainnetOracle, type Freshness, type MainnetTx } from "@/lib/mainnet";
 import { netMetadata, netParam, type NetParams, type NetSlug } from "@/lib/networks";
 import { CAP } from "@/lib/schedule";
 
@@ -14,7 +14,19 @@ export const generateMetadata = netMetadata("Overview");
 
 const freshTone: Record<Freshness, Tone> = { fresh: "good", warning: "warn", stale: "bad", unknown: "muted" };
 
-type GeroSummary = { status: string; tone: Tone; requests: string; nodes: string; nodesTone: Tone };
+type FeedRow = { time: number | null; what: ReactNode; href: string; ref: string };
+type GeroSummary = { status: string; tone: Tone; requests: string; nodes: string; nodesTone: Tone; feed: FeedRow[] | null };
+
+const FEED_ROWS = 6;
+
+function mainnetRow(t: MainnetTx): FeedRow {
+  return {
+    time: t.blockTime,
+    what: <span className={t.failed ? "text-term-red" : t.label === "Finalize" ? "text-term-green" : undefined}>{t.label}{t.failed ? " (failed)" : ""}</span>,
+    href: mainnetTx(t.signature),
+    ref: t.signature,
+  };
+}
 
 async function geroSummary(net: NetSlug): Promise<GeroSummary> {
   if (net === "mainnet") {
@@ -31,15 +43,32 @@ async function geroSummary(net: NetSlug): Promise<GeroSummary> {
       requests: `${int(oracle.totalRequests)} requested · ${int(oracle.totalFulfillments)} fulfilled`,
       nodes: nodes === null ? "?" : `${online} / ${nodes.length}`,
       nodesTone: online > 0 ? "good" : "bad",
+      feed: feed ? feed.txs.slice(0, FEED_ROWS).map(mainnetRow) : null,
     };
   }
-  const v = await getNetworkView();
+  const [v, events] = await Promise.all([getNetworkView(), getRecentEvents(FEED_ROWS).catch(() => null)]);
+  const sym = TESTNET.symbol;
   return {
     status: v.live ? "LIVE" : v.oracle.paused ? "PAUSED" : "STALE",
     tone: v.live ? "good" : "bad",
     requests: `${int(v.oracle.totalRequests)} requested · ${int(v.oracle.totalFulfillments)} served`,
     nodes: `${v.nodesOnline} / ${v.nodesListed}`,
     nodesTone: v.nodesOnline > 0 ? "good" : "bad",
+    feed: events
+      ? events.map((e) => ({
+          time: e.time,
+          what:
+            e.kind === "fulfilled" ? (
+              <span className="text-term-green">Request fulfilled · line {int(e.line ?? 0n)}</span>
+            ) : (
+              <span>
+                {e.kind === "claim" ? "Claim" : "Ecosystem claim"} · {e.amount === null ? "?" : amountShort(e.amount)} {sym}
+              </span>
+            ),
+          href: e.kind === "fulfilled" ? explorerAddress(e.ref) : explorerTx(e.ref),
+          ref: e.ref,
+        }))
+      : null,
   };
 }
 
@@ -130,6 +159,33 @@ export default async function OverviewPage(p: NetParams) {
           ) : null}
         </Panel>
       </div>
+
+      <Panel
+        className="mt-3"
+        title="Recent activity"
+        tag={<Badge tone={net === "mainnet" ? "good" : "warn"}>{net}</Badge>}
+      >
+        {gero.status === "rejected" || gero.value.feed === null ? (
+          <p className="font-mono text-sm text-term-text3">Activity unavailable.</p>
+        ) : gero.value.feed.length === 0 ? (
+          <p className="font-mono text-sm text-term-text3">Nothing recent.</p>
+        ) : (
+          <ul className="divide-y divide-term-line">
+            {gero.value.feed.map((f) => (
+              <li key={f.ref} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 py-2 font-mono text-[13px]">
+                <span className="text-term-text">{f.what}</span>
+                <span className="flex items-baseline gap-3 text-term-text3">
+                  {f.time !== null && <span title={utc(f.time)}>{timeAgo(f.time)}</span>}
+                  <a className="underline decoration-term-line" href={f.href} target="_blank" rel="noreferrer" title={f.ref}>
+                    {short(f.ref, 6)}
+                  </a>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <CardLink href={`/${net}/activity`}>View all →</CardLink>
+      </Panel>
 
       <div className="mt-6 flex flex-wrap gap-2">
         <Link href="/learn/how-to-test" className={btnPrimary}>

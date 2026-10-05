@@ -17,7 +17,7 @@ function mask(m: number): string {
 export async function TestnetActivity() {
   let v: ActivityView;
   try {
-    v = await getActivityView();
+    v = await getActivityView(32);
   } catch (e) {
     return (
       <>
@@ -29,7 +29,7 @@ export async function TestnetActivity() {
   const now = Date.now() / 1000;
   return (
     <>
-      <PageTitle title="Activity" network="testnet" sub="Recent lines, fulfilled requests and claims." right={<AutoRefresh renderedAt={Date.now()} />} />
+      <PageTitle title="Activity" network="testnet" sub="Recent lines, fulfilled requests and claims on X1 testnet." right={<AutoRefresh renderedAt={Date.now()} />} />
       <div className="grid grid-cols-1 gap-3">
         <Panel
           title="Recent lines"

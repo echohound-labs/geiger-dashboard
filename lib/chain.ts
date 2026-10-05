@@ -1061,7 +1061,7 @@ export async function getActivityView(lineCount = 16): Promise<ActivityView> {
   const watch = claimAccts.map((c) => c.address);
   if (state) watch.push(addresses().ecoVault(state.mint));
   const [fulfillments, claims, historyFromSlot] = await Promise.all([
-    getFulfilledRequests(25),
+    getFulfilledRequests(50),
     getRecentClaimEvents(watch, 40),
     rpc<number>("getFirstAvailableBlock", []).catch(() => null),
   ]);
@@ -1071,7 +1071,7 @@ export async function getActivityView(lineCount = 16): Promise<ActivityView> {
     lines,
     fulfillments,
     totalFulfillments: oracle.totalFulfillments,
-    claims: claims.slice(0, 25),
+    claims: claims.slice(0, 50),
     historyFromSlot,
     claimTotals: [...claimAccts].sort((a, b) => (b.totalClaimed > a.totalClaimed ? 1 : b.totalClaimed < a.totalClaimed ? -1 : 0)),
     ecoClaimed: state?.ecoClaimed ?? null,
@@ -1103,4 +1103,35 @@ export async function getMyNodeView(wallet: string): Promise<MyNodeView> {
     operatorSlots: nodes.filter((n) => n.operator === wallet).map((n) => n.index),
     nodes,
   };
+}
+
+export interface RecentEvent {
+  kind: "fulfilled" | "claim" | "ecosystem";
+  /** unix seconds, or null when the RPC did not return a block time */
+  time: number | null;
+  slot: number | null;
+  /** Request account (fulfilled) or signature (claims), for the explorer link. */
+  ref: string;
+  amount: bigint | null;
+  line: bigint | null;
+}
+
+/** The newest fulfilled requests and claims, merged by time; for the Overview's short feed. */
+export async function getRecentEvents(limit = 6): Promise<RecentEvent[]> {
+  const [fulfilled, state, claimAccts] = await Promise.all([getFulfilledRequests(limit), getMinterState(), getClaimAccounts()]);
+  const watch = claimAccts.map((c) => c.address);
+  if (state) watch.push(addresses().ecoVault(state.mint));
+  const claims = await getRecentClaimEvents(watch, limit).catch(() => [] as ClaimEvent[]);
+  const events: RecentEvent[] = [
+    ...fulfilled.map((f) => ({ kind: "fulfilled" as const, time: f.fulfilledAt, slot: null, ref: f.address, amount: null, line: f.line })),
+    ...claims.map((c) => ({
+      kind: c.kind === "Claimed" ? ("claim" as const) : ("ecosystem" as const),
+      time: c.blockTime,
+      slot: c.slot,
+      ref: c.signature,
+      amount: c.amount,
+      line: null,
+    })),
+  ];
+  return events.sort((a, b) => (b.time ?? 0) - (a.time ?? 0)).slice(0, limit);
 }
