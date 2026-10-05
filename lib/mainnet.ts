@@ -10,6 +10,7 @@
  * talks to the mainnet RPC.
  */
 
+import bs58 from "bs58";
 import { MAINNET_ORACLE } from "./config";
 
 // Anchor account discriminators (first 8 bytes, base58) for getProgramAccounts memcmp filters.
@@ -22,6 +23,8 @@ export const CANCEL_WINDOW_SLOTS = 138;
 const DEFAULT_MAX_POOL_AGE_SLOTS = 1500;
 /** A node counts as online if its last submission is younger than this. */
 export const ONLINE_THRESHOLD_S = 3600;
+/** An unapproved node with no submission for this long is shown as legacy. */
+export const LEGACY_AFTER_S = 30 * 86400;
 /** Measured X1 mainnet average slot time, seconds. */
 export const SLOT_S = 0.3675;
 const POOL_SEEDS = 32;
@@ -55,12 +58,18 @@ export interface MainnetRequest {
 
 export interface MainnetNode {
   address: string;
+  /** Operator-chosen name stored in the account. */
+  name: string;
+  operator: string;
+  registeredAt: number; // unix seconds
   submissions: number;
   reputation: number;
   active: boolean;
   approved: boolean;
   lastSubmission: number; // unix seconds
   online: boolean;
+  /** Not approved and not seen for LEGACY_AFTER_S: an old registration, shown greyed. */
+  legacy: boolean;
 }
 
 export type FeedLabel = "Finalize" | "Reveal + Commit" | "Reveal" | "Commit" | "Fulfill" | "Request" | "tx";
@@ -75,22 +84,6 @@ export interface MainnetTx {
 
 export type Freshness = "fresh" | "warning" | "stale" | "unknown";
 
-export interface MainnetView {
-  slot: number | null;
-  oracle: MainnetOracle;
-  pool: MainnetPool | null;
-  /** Status 0 and still inside the fulfil window; null if the read failed. */
-  pending: MainnetRequest[] | null;
-  /** Status 0 but past the fulfil window (cancel-only). */
-  expired: MainnetRequest[];
-  nodes: MainnetNode[] | null;
-  txs: MainnetTx[] | null;
-  /** Newest FinalizeEntropy among the recent operator transactions (unix seconds). */
-  lastFinalize: number | null;
-  freshness: Freshness;
-  freshnessAgeS: number | null;
-  poolAgeBoundS: number;
-}
 
 // ─── RPC ─────────────────────────────────────────────────────────────────────
 
@@ -185,14 +178,20 @@ function decodeNode(a: ProgramAccount, nowS: number): MainnetNode | null {
   const base = 76 + u32(d, 72);
   if (d.length < base + 27) return null;
   const lastSubmission = u64(d, base + 18);
+  const approved = d.length > base + 27 && d[base + 27] === 1;
+  const name = new TextDecoder().decode(d.subarray(76, base)).replace(/\0+$/, "").trim();
   return {
     address: a.pubkey,
+    name,
+    operator: bs58.encode(d.subarray(8, 40)),
+    registeredAt: u64(d, base + 10),
     submissions: u64(d, base),
     reputation: d[base + 8],
     active: d[base + 9] === 1,
-    approved: d.length > base + 27 && d[base + 27] === 1,
+    approved,
     lastSubmission,
     online: nowS - lastSubmission < ONLINE_THRESHOLD_S,
+    legacy: !approved && nowS - lastSubmission >= LEGACY_AFTER_S,
   };
 }
 
@@ -224,10 +223,10 @@ async function mapLimit<T, R>(items: T[], n: number, f: (x: T) => Promise<R>): P
   return out;
 }
 
-async function getRecentTxs(): Promise<MainnetTx[]> {
+async function getRecentTxs(limit: number): Promise<MainnetTx[]> {
   const sigs = await rpc<{ signature: string; blockTime: number | null; err: unknown }[]>("getSignaturesForAddress", [
     MAINNET_ORACLE.operator,
-    { limit: FEED_LIMIT, commitment: "confirmed" },
+    { limit, commitment: "confirmed" },
   ]);
   const details = await mapLimit(sigs, 8, (s) =>
     rpc<{ blockTime: number | null; meta: { fee: number; logMessages?: string[] } | null } | null>("getTransaction", [
@@ -245,52 +244,81 @@ async function getRecentTxs(): Promise<MainnetTx[]> {
   }));
 }
 
-// ─── Page view ───────────────────────────────────────────────────────────────
+// ─── Per-page reads ──────────────────────────────────────────────────────────
+// Each page asks only for what it shows (Overview: oracle + nodes + feed; Oracle status: oracle + pool + requests +
+// feed for freshness; Nodes: nodes; Activity: feed).
 
-export async function getMainnetView(): Promise<MainnetView> {
-  const soft = <T,>(p: Promise<T>) => p.catch(() => null);
-  const [oracleRes, poolRes, requestRes, nodeRes, slot, txs] = await Promise.all([
-    rpc<AccountInfo>("getAccountInfo", [MAINNET_ORACLE.oracleState, { encoding: "base64" }]),
-    soft(rpc<AccountInfo>("getAccountInfo", [MAINNET_ORACLE.entropyPool, { encoding: "base64" }])),
-    soft(
-      rpc<ProgramAccount[]>("getProgramAccounts", [
-        MAINNET_ORACLE.program,
-        {
-          filters: [{ memcmp: { offset: 0, bytes: DISC_RANDOMNESS_REQUEST } }, { dataSize: RANDOMNESS_REQUEST_SIZE }],
-          encoding: "base64",
-        },
-      ]),
-    ),
-    soft(
-      rpc<ProgramAccount[]>("getProgramAccounts", [
-        MAINNET_ORACLE.program,
-        { filters: [{ memcmp: { offset: 0, bytes: DISC_ENTROPY_NODE } }], encoding: "base64" },
-      ]),
-    ),
-    soft(rpc<number>("getSlot", [{ commitment: "confirmed" }])),
-    soft(getRecentTxs()),
+export async function getMainnetOracle(): Promise<MainnetOracle> {
+  const r = await rpc<AccountInfo>("getAccountInfo", [MAINNET_ORACLE.oracleState, { encoding: "base64" }]);
+  if (!r.value) throw new MainnetError("OracleState not found");
+  return decodeOracle(decode(r.value.data[0]));
+}
+
+export async function getMainnetPool(): Promise<MainnetPool | null> {
+  const r = await rpc<AccountInfo>("getAccountInfo", [MAINNET_ORACLE.entropyPool, { encoding: "base64" }]);
+  return r.value ? decodePool(decode(r.value.data[0])) : null;
+}
+
+export interface MainnetRequests {
+  slot: number | null;
+  /** Status 0 and still inside the fulfil window. */
+  pending: MainnetRequest[];
+  /** Status 0 but past the fulfil window (cancel-only). */
+  expired: MainnetRequest[];
+}
+
+/** Open requests split by the fulfil window. Without the current slot every open request counts as pending. */
+export async function getMainnetRequests(): Promise<MainnetRequests> {
+  const [accts, slot] = await Promise.all([
+    rpc<ProgramAccount[]>("getProgramAccounts", [
+      MAINNET_ORACLE.program,
+      {
+        filters: [{ memcmp: { offset: 0, bytes: DISC_RANDOMNESS_REQUEST } }, { dataSize: RANDOMNESS_REQUEST_SIZE }],
+        encoding: "base64",
+      },
+    ]),
+    rpc<number>("getSlot", [{ commitment: "confirmed" }]).catch(() => null),
   ]);
-  if (!oracleRes.value) throw new MainnetError("OracleState not found");
-  const oracle = decodeOracle(decode(oracleRes.value.data[0]));
-  const pool = poolRes?.value ? decodePool(decode(poolRes.value.data[0])) : null;
-
-  // Only requests still inside their fulfil window count as pending; older ones
-  // are cancel-only. Without the current slot every open request counts.
-  const open = requestRes ? requestRes.map(decodeOpenRequest).filter((r): r is MainnetRequest => r !== null) : null;
+  const open = accts.map(decodeOpenRequest).filter((r): r is MainnetRequest => r !== null);
   const inWindow = (r: MainnetRequest) => slot === null || r.requestSlot + CANCEL_WINDOW_SLOTS >= slot;
-  const pending = open ? open.filter(inWindow) : null;
-  const expired = open ? open.filter((r) => !inWindow(r)) : [];
+  return { slot, pending: open.filter(inWindow), expired: open.filter((r) => !inWindow(r)) };
+}
 
+/** Registered nodes, sorted by submissions. */
+export async function getMainnetNodes(): Promise<MainnetNode[]> {
+  const accts = await rpc<ProgramAccount[]>("getProgramAccounts", [
+    MAINNET_ORACLE.program,
+    { filters: [{ memcmp: { offset: 0, bytes: DISC_ENTROPY_NODE } }], encoding: "base64" },
+  ]);
   const nowS = Math.floor(Date.now() / 1000);
-  const nodes = nodeRes
-    ? nodeRes
-        .map((a) => decodeNode(a, nowS))
-        .filter((n): n is MainnetNode => n !== null)
-        .sort((a, b) => b.submissions - a.submissions)
-    : null;
+  return accts
+    .map((a) => decodeNode(a, nowS))
+    .filter((n): n is MainnetNode => n !== null)
+    .sort((a, b) => b.submissions - a.submissions);
+}
 
-  const finals = (txs ?? []).filter((t) => t.label === "Finalize" && !t.failed && t.blockTime !== null);
-  const lastFinalize = finals.length ? Math.max(...finals.map((t) => t.blockTime as number)) : null;
+export interface MainnetFeed {
+  txs: MainnetTx[];
+  /** Newest FinalizeEntropy among the fetched transactions (unix seconds). */
+  lastFinalize: number | null;
+}
+
+/** The node operator's newest `limit` transactions, labelled from their logs. */
+export async function getMainnetFeed(limit = FEED_LIMIT): Promise<MainnetFeed> {
+  const txs = await getRecentTxs(limit);
+  const finals = txs.filter((t) => t.label === "Finalize" && !t.failed && t.blockTime !== null);
+  return { txs, lastFinalize: finals.length ? Math.max(...finals.map((t) => t.blockTime as number)) : null };
+}
+
+export interface MainnetFreshness {
+  freshness: Freshness;
+  freshnessAgeS: number | null;
+  poolAgeBoundS: number;
+}
+
+/** Time since the newest finalize against the pool-age bound: warning past half of it, stale past it. */
+export function freshnessOf(oracle: MainnetOracle, lastFinalize: number | null): MainnetFreshness {
+  const nowS = Math.floor(Date.now() / 1000);
   const poolAgeBoundS = oracle.maxPoolAgeSlots * SLOT_S;
   const freshnessAgeS = lastFinalize === null ? null : Math.max(0, nowS - lastFinalize);
   const freshness: Freshness =
@@ -301,6 +329,5 @@ export async function getMainnetView(): Promise<MainnetView> {
         : freshnessAgeS > poolAgeBoundS / 2
           ? "warning"
           : "fresh";
-
-  return { slot, oracle, pool, pending, expired, nodes, txs, lastFinalize, freshness, freshnessAgeS, poolAgeBoundS };
+  return { freshness, freshnessAgeS, poolAgeBoundS };
 }

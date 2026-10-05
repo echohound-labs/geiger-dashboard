@@ -7,7 +7,7 @@
  */
 import { getActivityView, getEntropyView, getMyNodeView, getNetworkView, getNodesView } from "../lib/chain";
 import { MAINNET_ORACLE, NETWORK } from "../lib/config";
-import { getMainnetView } from "../lib/mainnet";
+import { freshnessOf, getMainnetFeed, getMainnetNodes, getMainnetOracle, getMainnetPool, getMainnetRequests } from "../lib/mainnet";
 import { amount, int, pct, xnt } from "../lib/format";
 import { CAP, GENESIS } from "../lib/schedule";
 
@@ -15,15 +15,23 @@ const row = (k: string, v: unknown) => console.log(`${k.padEnd(28)} ${v}`);
 
 async function main() {
   console.log(`# ${MAINNET_ORACLE.label} (GERO ${MAINNET_ORACLE.version})  ${MAINNET_ORACLE.rpcUrl}\n`);
-  const m = await getMainnetView();
+  const [oracle, pool, req, nodes0, feed] = await Promise.all([
+    getMainnetOracle(),
+    getMainnetPool(),
+    getMainnetRequests(),
+    getMainnetNodes(),
+    getMainnetFeed(),
+  ]);
+  const f = freshnessOf(oracle, feed.lastFinalize);
   console.log("## Oracle");
-  row("slot", m.slot ?? "?");
-  row("requests / fulfilled", `${m.oracle.totalRequests} / ${m.oracle.totalFulfillments}  paused=${m.oracle.paused}`);
-  row("pending / expired", `${m.pending?.length ?? "?"} / ${m.expired.length}`);
-  row("pool", m.pool ? `${m.pool.filled}/32 head ${m.pool.head % 32} submissions ${m.pool.totalSubmissions}` : "unavailable");
-  row("freshness", `${m.freshness} (${m.freshnessAgeS ?? "?"} s, bound ${m.poolAgeBoundS.toFixed(0)} s)`);
-  for (const n of m.nodes ?? []) row(`  node ${n.address.slice(0, 8)}`, `${n.online ? "online" : "offline"} subs ${n.submissions} approved=${n.approved}`);
-  for (const t of (m.txs ?? []).slice(0, 6)) row(`  ${t.signature.slice(0, 8)}`, `${t.label}${t.failed ? " (failed)" : ""} fee ${t.feeLamports ?? "?"}`);
+  row("slot", req.slot ?? "?");
+  row("requests / fulfilled", `${oracle.totalRequests} / ${oracle.totalFulfillments}  paused=${oracle.paused}`);
+  row("pending / expired", `${req.pending.length} / ${req.expired.length}`);
+  row("pool", pool ? `${pool.filled}/32 head ${pool.head % 32} submissions ${pool.totalSubmissions}` : "unavailable");
+  row("freshness", `${f.freshness} (${f.freshnessAgeS ?? "?"} s, bound ${f.poolAgeBoundS.toFixed(0)} s)`);
+  for (const n of nodes0)
+    row(`  node ${n.address.slice(0, 8)}`, `${n.name || "(no name)"} ${n.online ? "online" : "offline"} subs ${n.submissions} approved=${n.approved}${n.legacy ? " legacy" : ""}`);
+  for (const t of feed.txs.slice(0, 6)) row(`  ${t.signature.slice(0, 8)}`, `${t.label}${t.failed ? " (failed)" : ""} fee ${t.feeLamports ?? "?"}`);
 
   console.log(`\n# ${NETWORK.label}  ${NETWORK.rpcUrl}\n`);
 

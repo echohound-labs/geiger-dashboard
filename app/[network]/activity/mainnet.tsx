@@ -2,12 +2,13 @@ import { AutoRefresh } from "@/components/auto-refresh";
 import { Addr, ErrorPanel, PageTitle, Panel, Table } from "@/components/ui";
 import { mainnetAddress, mainnetTx } from "@/lib/config";
 import { int, short, timeAgo, utc, xnt } from "@/lib/format";
-import { CANCEL_WINDOW_SLOTS, getMainnetView, type MainnetView } from "@/lib/mainnet";
+import { CANCEL_WINDOW_SLOTS, getMainnetFeed, getMainnetRequests } from "@/lib/mainnet";
 
 export async function MainnetActivity() {
-  let v: MainnetView;
+  let v;
   try {
-    v = await getMainnetView();
+    const [req, feed] = await Promise.all([getMainnetRequests().catch(() => null), getMainnetFeed()]);
+    v = { pending: req?.pending ?? null, expired: req?.expired ?? [], txs: feed.txs };
   } catch (e) {
     return (
       <>

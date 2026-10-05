@@ -5,7 +5,7 @@ import { Badge, Dot, ErrorPanel, KV, PageTitle, Panel, type Tone } from "@/compo
 import { getEntropyView, getNetworkView } from "@/lib/chain";
 import { MAINNET_ORACLE, TESTNET, WHITE_PAPER_URL } from "@/lib/config";
 import { amount, amountShort, int, linesToDuration } from "@/lib/format";
-import { getMainnetView, type Freshness } from "@/lib/mainnet";
+import { freshnessOf, getMainnetFeed, getMainnetNodes, getMainnetOracle, type Freshness } from "@/lib/mainnet";
 import { netMetadata, netParam, type NetParams, type NetSlug } from "@/lib/networks";
 import { CAP } from "@/lib/schedule";
 
@@ -18,13 +18,18 @@ type GeroSummary = { status: string; tone: Tone; requests: string; nodes: string
 
 async function geroSummary(net: NetSlug): Promise<GeroSummary> {
   if (net === "mainnet") {
-    const v = await getMainnetView();
-    const online = v.nodes?.filter((n) => n.online).length ?? 0;
+    const [oracle, nodes, feed] = await Promise.all([
+      getMainnetOracle(),
+      getMainnetNodes().catch(() => null),
+      getMainnetFeed().catch(() => null),
+    ]);
+    const { freshness } = freshnessOf(oracle, feed?.lastFinalize ?? null);
+    const online = nodes?.filter((n) => n.online).length ?? 0;
     return {
-      status: v.oracle.paused ? "PAUSED" : v.freshness.toUpperCase(),
-      tone: v.oracle.paused ? "bad" : freshTone[v.freshness],
-      requests: `${int(v.oracle.totalRequests)} requested · ${int(v.oracle.totalFulfillments)} fulfilled`,
-      nodes: v.nodes === null ? "?" : `${online} / ${v.nodes.length}`,
+      status: oracle.paused ? "PAUSED" : freshness.toUpperCase(),
+      tone: oracle.paused ? "bad" : freshTone[freshness],
+      requests: `${int(oracle.totalRequests)} requested · ${int(oracle.totalFulfillments)} fulfilled`,
+      nodes: nodes === null ? "?" : `${online} / ${nodes.length}`,
       nodesTone: online > 0 ? "good" : "bad",
     };
   }

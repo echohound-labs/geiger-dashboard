@@ -2,12 +2,12 @@ import { AutoRefresh } from "@/components/auto-refresh";
 import { ErrorPanel, PageTitle, Panel, Table } from "@/components/ui";
 import { mainnetAddress } from "@/lib/config";
 import { int, short, timeAgo, utc } from "@/lib/format";
-import { ONLINE_THRESHOLD_S, getMainnetView, type MainnetView } from "@/lib/mainnet";
+import { ONLINE_THRESHOLD_S, getMainnetNodes } from "@/lib/mainnet";
 
 export async function MainnetNodes() {
-  let v: MainnetView;
+  let v;
   try {
-    v = await getMainnetView();
+    v = { nodes: await getMainnetNodes() };
   } catch (e) {
     return (
       <>

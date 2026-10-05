@@ -2,7 +2,7 @@ import { AutoRefresh } from "@/components/auto-refresh";
 import { Addr, Badge, Dot, ErrorPanel, Grid, KV, PageTitle, Panel, Stat, type Tone } from "@/components/ui";
 import { MAINNET_ORACLE, mainnetAddress } from "@/lib/config";
 import { int } from "@/lib/format";
-import { getMainnetView, type Freshness, type MainnetView } from "@/lib/mainnet";
+import { freshnessOf, getMainnetFeed, getMainnetOracle, getMainnetPool, getMainnetRequests, type Freshness } from "@/lib/mainnet";
 
 const freshTone: Record<Freshness, Tone> = { fresh: "good", warning: "warn", stale: "bad", unknown: "muted" };
 
@@ -11,9 +11,11 @@ function minutes(s: number): string {
 }
 
 export async function MainnetOracle() {
-  let v: MainnetView;
+  let v;
   try {
-    v = await getMainnetView();
+    const soft = <T,>(p: Promise<T>) => p.catch(() => null);
+    const [oracle, pool, req, feed] = await Promise.all([getMainnetOracle(), soft(getMainnetPool()), soft(getMainnetRequests()), soft(getMainnetFeed())]);
+    v = { oracle, pool, slot: req?.slot ?? null, pending: req?.pending ?? null, expired: req?.expired ?? [], ...freshnessOf(oracle, feed?.lastFinalize ?? null) };
   } catch (e) {
     return (
       <>
@@ -23,7 +25,6 @@ export async function MainnetOracle() {
     );
   }
   const o = v.oracle;
-  const online = v.nodes?.filter((n) => n.online).length ?? 0;
   return (
     <>
       <PageTitle
@@ -38,12 +39,6 @@ export async function MainnetOracle() {
           label="Fulfilled"
           value={int(o.totalFulfillments)}
           sub={v.pending === null ? "pending: unavailable" : `${v.pending.length} pending in the fulfil window`}
-        />
-        <Stat
-          label="Nodes"
-          value={v.nodes === null ? "?" : `${online} / ${v.nodes.length}`}
-          tone={online > 0 ? "good" : "bad"}
-          sub="online / registered"
         />
         <Stat
           label="Pool freshness"
