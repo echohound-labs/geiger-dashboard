@@ -24,7 +24,7 @@ export default async function ActivityPage() {
   } catch (e) {
     return (
       <>
-        <PageTitle title="Activity" />
+        <PageTitle title="Activity" network="testnet" />
         <ErrorPanel error={e} />
       </>
     );
@@ -32,7 +32,7 @@ export default async function ActivityPage() {
   const now = Date.now() / 1000;
   return (
     <>
-      <PageTitle title="Activity" sub="Recent lines, fulfilled requests and claims." right={<AutoRefresh renderedAt={Date.now()} />} />
+      <PageTitle title="Activity" network="testnet" sub="Recent lines, fulfilled requests and claims." right={<AutoRefresh renderedAt={Date.now()} />} />
       <div className="grid grid-cols-1 gap-3">
         <Panel
           title="Recent lines"

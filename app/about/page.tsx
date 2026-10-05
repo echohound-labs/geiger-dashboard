@@ -9,7 +9,7 @@ export const metadata = { title: "About" };
 export default function AboutPage() {
   return (
     <>
-      <PageTitle title="About" sub="What GERO and ENTROPY are, at the level of the white paper (v0.1, draft)." />
+      <PageTitle title="About" network="both" sub="What GERO and ENTROPY are, at the level of the white paper (v0.1, draft)." />
 
       <div
         role="note"

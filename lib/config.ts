@@ -1,12 +1,16 @@
 /**
  * lib/config.ts — every address and network constant the hub uses.
  *
- * X1 testnet is live. The mainnet block is left empty on purpose and is filled
- * in at launch; selecting it before then makes every page show a config error
- * instead of reading the wrong program.
+ * The hub shows two networks side by side:
+ *   X1 mainnet  GERO v8.1 (oracle only). MAINNET_ORACLE, read by lib/mainnet.ts.
+ *   X1 testnet  GERO v9.1b and the ENTROPY minter (tENTROPY). NETWORK, read by
+ *               lib/chain.ts and lib/tx.ts.
+ * ENTROPY is not launched on mainnet, so the v9.1b + ENTROPY view reads X1
+ * testnet only; there is no mainnet entry for it.
  *
- * Select with NEXT_PUBLIC_GERO_NETWORK=testnet|mainnet (default testnet).
- * NEXT_PUBLIC_X1_RPC_URL overrides the RPC endpoint of the selected network.
+ * NEXT_PUBLIC_X1_TESTNET_RPC_URL overrides the testnet RPC endpoint (also used
+ * by the wallet in the browser). X1_MAINNET_RPC_URL overrides the mainnet one
+ * (server only).
  */
 
 export type NetworkName = "testnet" | "mainnet";
@@ -35,44 +39,45 @@ export interface NetworkConfig {
   explorerQuery: string;
 }
 
-export const NETWORKS: Record<NetworkName, NetworkConfig> = {
-  testnet: {
-    name: "testnet",
-    label: "X1 Testnet",
-    rpcUrl: "https://rpc.testnet.x1.xyz",
-    geroProgram: "2dQf9uaCzXewrDNLttmtzQmc3SmqfAHz3qahKQjtGQyY",
-    minterProgram: "J79sxwNizAqFpTaXR9C5EAokhYDKW4JkYL4txAq5qAwS",
-    entropyMint: "85xvCxwKSns83kbwjqykAuSgVyAd3ZDdYfgVEfTCGtNm",
-    ecoVaultProgram: "F7pxRZZcBwHoB19SLRfSe5vSsCPMNDqimu2YMo8ngEHv",
-    symbol: "tENTROPY",
-    linesPerEra: 16_089_796,
-    explorer: "https://explorer.x1.xyz",
-    explorerQuery: "?cluster=testnet",
-  },
-  // Filled in at launch. Leave empty until the mainnet minter is initialized.
-  mainnet: {
-    name: "mainnet",
-    label: "X1 Mainnet",
-    rpcUrl: "",
-    geroProgram: "",
-    minterProgram: "",
-    entropyMint: "",
-    ecoVaultProgram: "",
-    symbol: "ENTROPY",
-    linesPerEra: 16_089_796,
-    explorer: "https://explorer.mainnet.x1.xyz",
-    explorerQuery: "",
-  },
+export const TESTNET: NetworkConfig = {
+  name: "testnet",
+  label: "X1 Testnet",
+  rpcUrl: process.env.NEXT_PUBLIC_X1_TESTNET_RPC_URL || "https://rpc.testnet.x1.xyz",
+  geroProgram: "2dQf9uaCzXewrDNLttmtzQmc3SmqfAHz3qahKQjtGQyY",
+  minterProgram: "J79sxwNizAqFpTaXR9C5EAokhYDKW4JkYL4txAq5qAwS",
+  entropyMint: "85xvCxwKSns83kbwjqykAuSgVyAd3ZDdYfgVEfTCGtNm",
+  ecoVaultProgram: "F7pxRZZcBwHoB19SLRfSe5vSsCPMNDqimu2YMo8ngEHv",
+  symbol: "tENTROPY",
+  linesPerEra: 16_089_796,
+  explorer: "https://explorer.x1.xyz",
+  explorerQuery: "?cluster=testnet",
 };
 
-function selectNetwork(): NetworkConfig {
-  const name = (process.env.NEXT_PUBLIC_GERO_NETWORK ?? "testnet") as NetworkName;
-  const base = NETWORKS[name] ?? NETWORKS.testnet;
-  const rpcUrl = process.env.NEXT_PUBLIC_X1_RPC_URL || base.rpcUrl;
-  return { ...base, rpcUrl };
+/** The v9.1b + ENTROPY view. Always X1 testnet. */
+export const NETWORK: NetworkConfig = TESTNET;
+
+/** GERO v8.1 on X1 mainnet: the live oracle. Addresses from the v8.1 dashboard. */
+export const MAINNET_ORACLE = {
+  label: "X1 Mainnet",
+  version: "v8.1",
+  rpcUrl: process.env.X1_MAINNET_RPC_URL || "https://rpc.mainnet.x1.xyz",
+  program: "BxUNg2yo5371BQMZPkfcxdCptFRDHkhvEXNM1QNPBRYU",
+  /** ["oracle_state"] under the program. */
+  oracleState: "BygMTZ1oLBD9tDmssnt9LkNT7BEd2PCJBCzurwtMuTqm",
+  /** ["entropy_pool"] under the program. */
+  entropyPool: "GDECYXCXietabJs9Y1baKzD3t4VFBw4eZWPnvYenyi77",
+  /** The node operator whose transactions make up the live feed. */
+  operator: "HGFisVbULNKqogtPuGTfcHG9y6i5nboZabYwifkiiodo",
+  explorer: "https://explorer.x1.xyz",
+} as const;
+
+export function mainnetTx(signature: string): string {
+  return `${MAINNET_ORACLE.explorer}/tx/${signature}`;
 }
 
-export const NETWORK: NetworkConfig = selectNetwork();
+export function mainnetAddress(address: string): string {
+  return `${MAINNET_ORACLE.explorer}/address/${address}`;
+}
 
 /** Fields that must be set before the selected network can be read. */
 export function missingConfig(cfg: NetworkConfig = NETWORK): string[] {
@@ -81,9 +86,9 @@ export function missingConfig(cfg: NetworkConfig = NETWORK): string[] {
 }
 
 /**
- * Write buttons (open_claim, claim) are enabled on X1 testnet only. Any other
- * selection, mainnet included, keeps them disabled with a "not before launch"
- * note; this is an allowlist, not a mainnet check.
+ * Write buttons (open_claim, claim) are enabled on X1 testnet only. This is an
+ * allowlist, not a mainnet check: any other config keeps them disabled with a
+ * "not before launch" note.
  */
 export function writesAllowed(cfg: NetworkConfig = NETWORK): boolean {
   return cfg.name === "testnet" && missingConfig(cfg).length === 0;

@@ -1,9 +1,14 @@
 import type { ReactNode } from "react";
+import { NetworkLabel, type Net } from "./network";
 
-export function PageTitle({ title, sub, right }: { title: string; sub?: ReactNode; right?: ReactNode }) {
+/** Every page title names the network the page reads. */
+export function PageTitle({ title, network, sub, right }: { title: string; network: Net; sub?: ReactNode; right?: ReactNode }) {
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
       <div>
+        <div className="mb-2">
+          <NetworkLabel net={network} />
+        </div>
         <h1 className="font-mono text-2xl tracking-wide text-term-green">{title}</h1>
         {sub && <p className="mt-1 max-w-3xl text-sm text-term-text2">{sub}</p>}
       </div>

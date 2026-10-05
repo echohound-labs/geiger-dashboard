@@ -2,17 +2,25 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { WalletButton } from "./wallet-button";
-import { NETWORK } from "@/lib/config";
 
-const NAV = [
-  { href: "/", label: "Network" },
-  { href: "/nodes", label: "Nodes" },
-  { href: "/entropy", label: "ENTROPY" },
-  { href: "/my-node", label: "My node" },
-  { href: "/activity", label: "Activity" },
-  { href: "/about", label: "About" },
+const GROUPS = [
+  { tag: "Mainnet", tone: "text-term-green", items: [{ href: "/", label: "Oracle" }] },
+  {
+    tag: "Testnet",
+    tone: "text-term-amber",
+    items: [
+      { href: "/testnet", label: "Network" },
+      { href: "/testnet/nodes", label: "Nodes" },
+      { href: "/testnet/entropy", label: "ENTROPY" },
+      { href: "/testnet/my-node", label: "My node" },
+      { href: "/testnet/activity", label: "Activity" },
+    ],
+  },
+  { tag: null, tone: "", items: [{ href: "/about", label: "About" }] },
 ];
+
+// "/" and "/testnet" have child routes, so they match exactly.
+const EXACT = new Set(["/", "/testnet"]);
 
 export function SiteHeader() {
   const path = usePathname();
@@ -22,28 +30,29 @@ export function SiteHeader() {
         <Link href="/" className="font-mono text-lg tracking-widest text-term-green">
           GERO<span className="text-term-text2">/hub</span>
         </Link>
-        <span className="rounded border border-term-amber/40 px-2 py-0.5 font-mono text-[11px] uppercase tracking-wider text-term-amber">
-          {NETWORK.label}
-        </span>
-        <nav className="order-last -mx-1 flex w-full gap-1 overflow-x-auto sm:order-none sm:w-auto sm:flex-1">
-          {NAV.map((n) => {
-            const active = n.href === "/" ? path === "/" : path.startsWith(n.href);
-            return (
-              <Link
-                key={n.href}
-                href={n.href}
-                className={`whitespace-nowrap rounded px-2.5 py-1.5 font-mono text-[13px] tracking-wide transition-colors ${
-                  active ? "bg-term-green/10 text-term-green" : "text-term-text2 hover:text-term-text"
-                }`}
-              >
-                {n.label}
-              </Link>
-            );
-          })}
+        <nav className="-mx-1 flex w-full items-center gap-1 overflow-x-auto lg:w-auto lg:flex-1">
+          {GROUPS.map((g, gi) => (
+            <div key={gi} className={`flex items-center gap-1 ${gi > 0 ? "border-l border-term-line pl-2" : ""}`}>
+              {g.tag && (
+                <span className={`px-1 font-mono text-[10px] uppercase tracking-[0.14em] ${g.tone}`}>{g.tag}</span>
+              )}
+              {g.items.map((n) => {
+                const active = EXACT.has(n.href) ? path === n.href : path.startsWith(n.href);
+                return (
+                  <Link
+                    key={n.href}
+                    href={n.href}
+                    className={`whitespace-nowrap rounded px-2.5 py-1.5 font-mono text-[13px] tracking-wide transition-colors ${
+                      active ? "bg-term-green/10 text-term-green" : "text-term-text2 hover:text-term-text"
+                    }`}
+                  >
+                    {n.label}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </nav>
-        <div className="ml-auto sm:ml-0">
-          <WalletButton />
-        </div>
       </div>
     </header>
   );

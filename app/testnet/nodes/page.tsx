@@ -16,7 +16,7 @@ export default async function NodesPage() {
   } catch (e) {
     return (
       <>
-        <PageTitle title="Nodes" />
+        <PageTitle title="Nodes" network="testnet" />
         <ErrorPanel error={e} />
       </>
     );
@@ -24,6 +24,7 @@ export default async function NodesPage() {
   return (
     <>
       <PageTitle
+        network="testnet"
         title="Nodes"
         sub={`Every node in GERO's table. On-time rate is over the last ${int(v.window)} final lines (≈ ${linesToDuration(v.window)}) of the line record. Required stake ${xnt(v.requiredStakeLamports)}, slash ${xnt(v.slashLamports)} per missed line.`}
         right={<AutoRefresh renderedAt={Date.now()} />}

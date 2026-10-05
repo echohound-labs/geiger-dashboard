@@ -17,7 +17,7 @@ export default async function EntropyPage() {
   } catch (e) {
     return (
       <>
-        <PageTitle title="ENTROPY" />
+        <PageTitle title="ENTROPY" network="testnet" />
         <ErrorPanel error={e} />
       </>
     );
@@ -29,6 +29,7 @@ export default async function EntropyPage() {
   return (
     <>
       <PageTitle
+        network="testnet"
         title="ENTROPY"
         sub={`Minter state, emission schedule and a live supply check (${sym}).`}
         right={<AutoRefresh renderedAt={Date.now()} />}

@@ -1,19 +1,31 @@
 /**
- * npm run verify — prints, as plain text, every value the pages show, read through
- * lib/chain.ts against the configured network. Compare its output with
+ * npm run verify — prints, as plain text, every value the pages show: the X1
+ * mainnet oracle through lib/mainnet.ts, then X1 testnet through lib/chain.ts. Compare its output with
  * ~/entropy-token/scripts/supply_check.py and settle_crank.py (--plan) on the same
  * cluster; the figures must agree up to the slots that pass between the runs.
  * Read-only.
  */
 import { getActivityView, getEntropyView, getMyNodeView, getNetworkView, getNodesView } from "../lib/chain";
-import { NETWORK } from "../lib/config";
+import { MAINNET_ORACLE, NETWORK } from "../lib/config";
+import { getMainnetView } from "../lib/mainnet";
 import { amount, int, pct, xnt } from "../lib/format";
 import { CAP, GENESIS } from "../lib/schedule";
 
 const row = (k: string, v: unknown) => console.log(`${k.padEnd(28)} ${v}`);
 
 async function main() {
-  console.log(`# ${NETWORK.label}  ${NETWORK.rpcUrl}\n`);
+  console.log(`# ${MAINNET_ORACLE.label} (GERO ${MAINNET_ORACLE.version})  ${MAINNET_ORACLE.rpcUrl}\n`);
+  const m = await getMainnetView();
+  console.log("## Oracle");
+  row("slot", m.slot ?? "?");
+  row("requests / fulfilled", `${m.oracle.totalRequests} / ${m.oracle.totalFulfillments}  paused=${m.oracle.paused}`);
+  row("pending / expired", `${m.pending?.length ?? "?"} / ${m.expired.length}`);
+  row("pool", m.pool ? `${m.pool.filled}/32 head ${m.pool.head % 32} submissions ${m.pool.totalSubmissions}` : "unavailable");
+  row("freshness", `${m.freshness} (${m.freshnessAgeS ?? "?"} s, bound ${m.poolAgeBoundS.toFixed(0)} s)`);
+  for (const n of m.nodes ?? []) row(`  node ${n.address.slice(0, 8)}`, `${n.online ? "online" : "offline"} subs ${n.submissions} approved=${n.approved}`);
+  for (const t of (m.txs ?? []).slice(0, 6)) row(`  ${t.signature.slice(0, 8)}`, `${t.label}${t.failed ? " (failed)" : ""} fee ${t.feeLamports ?? "?"}`);
+
+  console.log(`\n# ${NETWORK.label}  ${NETWORK.rpcUrl}\n`);
 
   const net = await getNetworkView();
   console.log("## Network");
