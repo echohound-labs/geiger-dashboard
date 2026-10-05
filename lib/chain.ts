@@ -350,11 +350,10 @@ async function getAccounts(addrs: string[]): Promise<(RawAccount | null)[]> {
   return out;
 }
 
-async function getProgramAccounts(program: string, filters: unknown[]): Promise<RawAccount[]> {
-  const r = await rpc<{ pubkey: string; account: RpcAccount }[]>("getProgramAccounts", [
-    program,
-    { encoding: "base64", commitment: COMMITMENT, filters },
-  ]);
+async function getProgramAccounts(program: string, filters: unknown[], slice?: { offset: number; length: number }): Promise<RawAccount[]> {
+  const opts: Record<string, unknown> = { encoding: "base64", commitment: COMMITMENT, filters };
+  if (slice) opts.dataSlice = slice;
+  const r = await rpc<{ pubkey: string; account: RpcAccount }[]>("getProgramAccounts", [program, opts]);
   return r.map((x) => toRaw(x.pubkey, x.account)!);
 }
 
@@ -1109,29 +1108,91 @@ export interface RecentEvent {
   kind: "fulfilled" | "claim" | "ecosystem";
   /** unix seconds, or null when the RPC did not return a block time */
   time: number | null;
-  slot: number | null;
   /** Request account (fulfilled) or signature (claims), for the explorer link. */
   ref: string;
   amount: bigint | null;
   line: bigint | null;
 }
 
-/** The newest fulfilled requests and claims, merged by time; for the Overview's short feed. */
-export async function getRecentEvents(limit = 6): Promise<RecentEvent[]> {
-  const [fulfilled, state, claimAccts] = await Promise.all([getFulfilledRequests(limit), getMinterState(), getClaimAccounts()]);
-  const watch = claimAccts.map((c) => c.address);
-  if (state) watch.push(addresses().ecoVault(state.mint));
-  const claims = await getRecentClaimEvents(watch, limit).catch(() => [] as ClaimEvent[]);
-  const events: RecentEvent[] = [
-    ...fulfilled.map((f) => ({ kind: "fulfilled" as const, time: f.fulfilledAt, slot: null, ref: f.address, amount: null, line: f.line })),
-    ...claims.map((c) => ({
-      kind: c.kind === "Claimed" ? ("claim" as const) : ("ecosystem" as const),
-      time: c.blockTime,
-      slot: c.slot,
-      ref: c.signature,
-      amount: c.amount,
-      line: null,
-    })),
-  ];
-  return events.sort((a, b) => (b.time ?? 0) - (a.time ?? 0)).slice(0, limit);
+/** Newest fulfilled requests: only fulfilled_at, request_slot and binding (bytes 113..138) cross the wire. */
+async function getRecentFulfillments(limit: number, cfg: NetworkConfig = NETWORK) {
+  const accts = await getProgramAccounts(
+    cfg.geroProgram,
+    [{ dataSize: REQUEST_LEN }, memcmp(0, disc("RandomnessRequest")), memcmp(104, new Uint8Array([REQUEST_STATUS_FULFILLED]))],
+    { offset: 113, length: 25 },
+  );
+  return accts
+    .map((a) => ({ address: a.address, fulfilledAt: Number(i64(a.data, 0)), line: u64(a.data, 17) & LINE_MASK_BITS }))
+    .sort((x, y) => y.fulfilledAt - x.fulfilledAt)
+    .slice(0, limit);
+}
+
+/** How far back the Overview looks for the newest on-time line; "live" needs one within the 32-line cutoff. */
+const OVERVIEW_LINES = 64n;
+
+export interface TestnetOverview {
+  live: boolean;
+  paused: boolean;
+  totalRequests: bigint;
+  totalFulfillments: bigint;
+  nodesOnline: number;
+  nodesListed: number;
+  /** null when the minter is not initialized */
+  entropy: { supply: bigint | null; era: number; ratePerLine: bigint; nextHalvingLine: bigint; linesToHalving: bigint } | null;
+  events: RecentEvent[] | null;
+}
+
+/**
+ * Everything the testnet Overview shows and nothing more: OracleState, the last 64 line-record entries (not the whole
+ * ring), the minter's start line and the mint supply, and the newest fulfilled requests and claims.
+ */
+export async function getTestnetOverview(feedRows = 6): Promise<TestnetOverview> {
+  const [slot, oracle, header, state] = await Promise.all([getSlot(), getOracleState(), getLineLogHeader(), getMinterState()]);
+  const currentLine = BigInt(slot) / BigInt(LINE_SLOTS);
+  const entriesP = header && !header.defect ? getLineEntries(header, currentLine - OVERVIEW_LINES + 1n, currentLine) : Promise.resolve(new Map<bigint, LineEntry>());
+  const events = (async (): Promise<RecentEvent[]> => {
+    const [fulfilled, claimAccts] = await Promise.all([getRecentFulfillments(feedRows), getClaimAccounts()]);
+    const watch = claimAccts.map((c) => c.address);
+    if (state) watch.push(addresses().ecoVault(state.mint));
+    const claims = await getRecentClaimEvents(watch, feedRows).catch(() => [] as ClaimEvent[]);
+    return [
+      ...fulfilled.map((f) => ({ kind: "fulfilled" as const, time: f.fulfilledAt, ref: f.address, amount: null, line: f.line })),
+      ...claims.map((c) => ({
+        kind: c.kind === "Claimed" ? ("claim" as const) : ("ecosystem" as const),
+        time: c.blockTime,
+        ref: c.signature,
+        amount: c.amount,
+        line: null,
+      })),
+    ]
+      .sort((a, b) => (b.time ?? 0) - (a.time ?? 0))
+      .slice(0, feedRows);
+  })().catch(() => null);
+  const [entries, mint, ev] = await Promise.all([entriesP, state ? getMintSupply(state.mint).catch(() => null) : null, events]);
+
+  let newest: bigint | null = null;
+  entries.forEach((e) => {
+    if (e.flags & LINE_FLAG_FINAL && e.onTimeMask !== 0 && (newest === null || e.line > newest)) newest = e.line;
+  });
+  const listed = oracle.nodes.filter((n) => !isZeroKey(n.operator));
+  const n = NETWORK.linesPerEra;
+  const nh = state ? nextHalvingLine(state.startLine, currentLine, n) : 0n;
+  return {
+    live: !oracle.paused && newest !== null && currentLine - (newest as bigint) <= BigInt(LINE_LOG_WRITE_CUTOFF_LINES),
+    paused: oracle.paused,
+    totalRequests: oracle.totalRequests,
+    totalFulfillments: oracle.totalFulfillments,
+    nodesOnline: listed.filter((x) => isOnline(x, currentLine)).length,
+    nodesListed: listed.length,
+    entropy: state
+      ? {
+          supply: mint && mint.owner === TOKEN_2022 ? mint.supply : null,
+          era: eraOf(state.startLine, currentLine, n),
+          ratePerLine: rewardForLine(state.startLine, currentLine < state.startLine ? state.startLine : currentLine, n),
+          nextHalvingLine: nh,
+          linesToHalving: nh - currentLine,
+        }
+      : null,
+    events: ev,
+  };
 }

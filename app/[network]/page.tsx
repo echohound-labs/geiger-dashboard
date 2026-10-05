@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { Badge, Dot, ErrorPanel, KV, PageTitle, Panel, type Tone } from "@/components/ui";
-import { getEntropyView, getNetworkView, getRecentEvents } from "@/lib/chain";
+import { getTestnetOverview, type TestnetOverview } from "@/lib/chain";
 import { MAINNET_ORACLE, TESTNET, WHITE_PAPER_URL, explorerAddress, explorerTx, mainnetTx } from "@/lib/config";
 import { amount, amountShort, int, linesToDuration, short, timeAgo, utc } from "@/lib/format";
 import { freshnessOf, getMainnetFeed, getMainnetNodes, getMainnetOracle, type Freshness, type MainnetTx } from "@/lib/mainnet";
@@ -15,7 +15,16 @@ export const generateMetadata = netMetadata("Overview");
 const freshTone: Record<Freshness, Tone> = { fresh: "good", warning: "warn", stale: "bad", unknown: "muted" };
 
 type FeedRow = { time: number | null; what: ReactNode; href: string; ref: string };
-type GeroSummary = { status: string; tone: Tone; requests: string; nodes: string; nodesTone: Tone; feed: FeedRow[] | null };
+type GeroSummary = {
+  status: string;
+  tone: Tone;
+  requests: string;
+  nodes: string;
+  nodesTone: Tone;
+  feed: FeedRow[] | null;
+  /** Testnet only: the ENTROPY card's figures, from the same read. */
+  entropy?: TestnetOverview["entropy"];
+};
 
 const FEED_ROWS = 6;
 
@@ -46,16 +55,18 @@ async function geroSummary(net: NetSlug): Promise<GeroSummary> {
       feed: feed ? feed.txs.slice(0, FEED_ROWS).map(mainnetRow) : null,
     };
   }
-  const [v, events] = await Promise.all([getNetworkView(), getRecentEvents(FEED_ROWS).catch(() => null)]);
+  // One slim read: no full line record, no supply checks, no full request accounts.
+  const v = await getTestnetOverview(FEED_ROWS);
   const sym = TESTNET.symbol;
   return {
-    status: v.live ? "LIVE" : v.oracle.paused ? "PAUSED" : "STALE",
+    status: v.live ? "LIVE" : v.paused ? "PAUSED" : "STALE",
     tone: v.live ? "good" : "bad",
-    requests: `${int(v.oracle.totalRequests)} requested · ${int(v.oracle.totalFulfillments)} served`,
+    requests: `${int(v.totalRequests)} requested · ${int(v.totalFulfillments)} served`,
     nodes: `${v.nodesOnline} / ${v.nodesListed}`,
     nodesTone: v.nodesOnline > 0 ? "good" : "bad",
-    feed: events
-      ? events.map((e) => ({
+    entropy: v.entropy,
+    feed: v.events
+      ? v.events.map((e) => ({
           time: e.time,
           what:
             e.kind === "fulfilled" ? (
@@ -86,10 +97,8 @@ function CardLink({ href, children }: { href: string; children: ReactNode }) {
 
 export default async function OverviewPage(p: NetParams) {
   const net = netParam(p);
-  const [gero, entropy] = await Promise.allSettled([
-    geroSummary(net),
-    net === "testnet" ? getEntropyView() : Promise.resolve(null),
-  ]);
+  const [gero] = await Promise.allSettled([geroSummary(net)]);
+  const entropy = gero.status === "fulfilled" ? (gero.value.entropy ?? null) : null;
   const sym = TESTNET.symbol;
   return (
     <>
@@ -136,27 +145,29 @@ export default async function OverviewPage(p: NetParams) {
               <p className="text-[15px] text-term-text">ENTROPY is not launched on mainnet yet.</p>
               <CardLink href="/testnet">Try it on Testnet →</CardLink>
             </>
-          ) : entropy.status === "rejected" ? (
-            <ErrorPanel error={entropy.reason} />
-          ) : entropy.value ? (
+          ) : gero.status === "rejected" ? (
+            <ErrorPanel error={gero.reason} />
+          ) : entropy === null ? (
+            <p className="text-[15px] text-term-text">The minter is not initialized on testnet.</p>
+          ) : (
             <>
               <KV
                 rows={[
                   [
                     "Minted / cap",
-                    `${entropy.value.supply === null ? "?" : amountShort(entropy.value.supply)} / ${amountShort(CAP, 0)}`,
+                    `${entropy.supply === null ? "?" : amountShort(entropy.supply)} / ${amountShort(CAP, 0)}`,
                   ],
-                  ["Era", entropy.value.era],
-                  ["Rate", `${amount(entropy.value.ratePerLine)} ${sym} per line`],
+                  ["Era", entropy.era],
+                  ["Rate", `${amount(entropy.ratePerLine)} ${sym} per line`],
                   [
                     "Next halving",
-                    `line ${int(entropy.value.nextHalvingLine)} (≈ ${linesToDuration(entropy.value.linesToHalving)})`,
+                    `line ${int(entropy.nextHalvingLine)} (≈ ${linesToDuration(entropy.linesToHalving)})`,
                   ],
                 ]}
               />
               <CardLink href="/testnet/entropy">Token &amp; supply →</CardLink>
             </>
-          ) : null}
+          )}
         </Panel>
       </div>
 
