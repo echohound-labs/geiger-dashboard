@@ -115,6 +115,17 @@ export const ATA_PROGRAM = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL";
 export const LOADER_V3 = "BPFLoaderUpgradeab1e11111111111111111111111";
 
 /**
+ * Display names for node cards, by node address: the EntropyNode account on mainnet, the node (operator) key on
+ * testnet. The card title uses this; the on-chain name moves into the card's Details. Unmapped nodes keep their
+ * on-chain name.
+ */
+export const NODE_NAMES: Record<string, string> = {
+  z4Psp8qVfP4t3jiWHE29rrisTPMC78tu8LmDhRSEL3s: "Genesis Node",
+  "3SXxcRMS47VXCyVWxsCddZbvmxWp2nU2b6fquD5eL8sC": "Legacy node (retired)",
+  FB4jp1T1YB5ttaeCEvNisqPmVpqfQyet4WxN6HsQdqxh: "Genesis Node (testnet)", // testnet slot 0
+};
+
+/**
  * Measured X1 mainnet slot time (white paper §5.5). Used ONLY to turn slot
  * counts into approximate durations; every schedule figure is in lines/slots.
  */

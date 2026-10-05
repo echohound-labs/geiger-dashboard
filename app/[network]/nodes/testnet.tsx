@@ -2,7 +2,7 @@ import { AutoRefresh } from "@/components/auto-refresh";
 import { BecomeOperator, LineStrip, NodeCard } from "@/components/node-card";
 import { Addr, Badge, ErrorPanel, HOT_PAYOUT_NOTE, HotPayoutBadge, PageTitle, Panel, type Tone } from "@/components/ui";
 import { PAYOUT_DELAY_SLOTS, getNodesView, type NodeView, type NodesView } from "@/lib/chain";
-import { NETWORK } from "@/lib/config";
+import { NETWORK, NODE_NAMES } from "@/lib/config";
 import { amount, int, linesToDuration, pct, slotsToDuration, xnt } from "@/lib/format";
 
 function statusBadge(n: NodeView): { tone: Tone; text: string } {
@@ -29,7 +29,7 @@ function Card({ n, required }: { n: NodeView; required: bigint }) {
   return (
     <NodeCard
       legacy={n.legacy}
-      name={`Node ${n.index}`}
+      name={NODE_NAMES[n.operator] ?? `Node ${n.index}`}
       sub={<>slot {n.index} · {n.statusNote || "—"}</>}
       badges={
         <>
@@ -97,14 +97,13 @@ function Card({ n, required }: { n: NodeView; required: bigint }) {
           ),
         ],
       ]}
-      footer={
-        <>
-          {hot && <p className="font-mono text-xs text-term-amber">⚠ {HOT_PAYOUT_NOTE}</p>}
-          <p className="mt-1 font-mono text-xs text-term-text3">
-            node key <Addr value={n.operator} />
-          </p>
-        </>
-      }
+      footer={hot ? <p className="font-mono text-xs text-term-amber">⚠ {HOT_PAYOUT_NOTE}</p> : undefined}
+      details={[
+        ["On-chain name", `none (GERO ${NETWORK.geroVersion} stores no node names)`],
+        ["Node slot", String(n.index)],
+        ["Node key", <Addr key="k" value={n.operator} />],
+        ["Claim account", <Addr key="c" value={n.claimAddress} />],
+      ]}
     />
   );
 }

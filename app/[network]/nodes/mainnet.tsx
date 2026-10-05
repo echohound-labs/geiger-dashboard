@@ -1,7 +1,7 @@
 import { AutoRefresh } from "@/components/auto-refresh";
 import { BecomeOperator, NodeCard } from "@/components/node-card";
 import { Addr, Badge, ErrorPanel, PageTitle, Panel, type Tone } from "@/components/ui";
-import { MAINNET_ORACLE, mainnetAddress } from "@/lib/config";
+import { MAINNET_ORACLE, NODE_NAMES, mainnetAddress } from "@/lib/config";
 import { int, timeAgo, utc } from "@/lib/format";
 import { LEGACY_AFTER_S, ONLINE_THRESHOLD_S, getMainnetNodes, type MainnetNode } from "@/lib/mainnet";
 
@@ -42,7 +42,7 @@ export async function MainnetNodes() {
             <NodeCard
               key={n.address}
               legacy={n.legacy}
-              name={n.name || "Unnamed node"}
+              name={NODE_NAMES[n.address] ?? (n.name || "Unnamed node")}
               sub={
                 <a className="underline decoration-term-line" href={mainnetAddress(n.address)} target="_blank" rel="noreferrer">
                   <Addr value={n.address} />
@@ -68,6 +68,10 @@ export async function MainnetNodes() {
                 ["Operator", <Addr key="o" value={n.operator} />],
                 ["Registered", n.registeredAt ? <span key="r" title={utc(n.registeredAt)}>{utc(n.registeredAt).slice(0, 10)}</span> : "—"],
                 ["Active flag", n.active ? "yes" : "no"],
+              ]}
+              details={[
+                ["On-chain name", n.name || "—"],
+                ["Node account", <Addr key="a" value={n.address} />],
               ]}
             />
           );

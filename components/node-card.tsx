@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Badge, KV, Panel, type Tone } from "./ui";
+import { Badge, Details, KV, Panel, type Tone } from "./ui";
 import { int } from "@/lib/format";
 
 /** One node: name and slot, a badge row, then two columns of figures. Legacy nodes are greyed. */
@@ -10,6 +10,7 @@ export function NodeCard({
   left,
   right,
   footer,
+  details,
   legacy = false,
 }: {
   name: ReactNode;
@@ -18,6 +19,8 @@ export function NodeCard({
   left: [ReactNode, ReactNode][];
   right: [ReactNode, ReactNode][];
   footer?: ReactNode;
+  /** Rows for the card's closed Details box (on-chain name, addresses). */
+  details?: [ReactNode, ReactNode][];
   legacy?: boolean;
 }) {
   return (
@@ -34,6 +37,11 @@ export function NodeCard({
         <KV rows={right} />
       </div>
       {footer && <div className="mt-3">{footer}</div>}
+      {details && (
+        <Details className="mt-3">
+          <KV rows={details} />
+        </Details>
+      )}
     </Panel>
   );
 }
