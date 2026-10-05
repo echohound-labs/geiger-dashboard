@@ -1,13 +1,20 @@
 import { AutoRefresh } from "@/components/auto-refresh";
-import { Addr, Badge, Dot, ErrorPanel, Grid, KV, PageTitle, Panel, Stat } from "@/components/ui";
-import { getNetworkView, type NetworkView } from "@/lib/chain";
-import { NETWORK } from "@/lib/config";
+import { RequestTable } from "@/components/requests";
+import { Addr, Badge, Details, Dot, ErrorPanel, Grid, KV, PageTitle, Panel, Stat, SubHead } from "@/components/ui";
+import { CANCEL_WINDOW_SLOTS, getNetworkView, getOpenRequests } from "@/lib/chain";
+import { NETWORK, explorerAddress } from "@/lib/config";
 import { int, linesToDuration } from "@/lib/format";
 
+async function load() {
+  const v = await getNetworkView();
+  const req = await getOpenRequests(v.slot).catch(() => null);
+  return { v, req };
+}
+
 export async function TestnetOracle() {
-  let v: NetworkView;
+  let data: Awaited<ReturnType<typeof load>>;
   try {
-    v = await getNetworkView();
+    data = await load();
   } catch (e) {
     return (
       <>
@@ -16,19 +23,23 @@ export async function TestnetOracle() {
       </>
     );
   }
+  const { v, req } = data;
   const ring = v.ringWindow;
   const ringLines = Number(ring.last - ring.first + 1n);
+  const pending = req?.pending ?? [];
+  const expired = req?.expired ?? [];
+  const href = (a: string) => explorerAddress(a);
   return (
     <>
       <PageTitle
         network="testnet"
         title="Oracle status"
-        sub="GERO v9.1b, the next version, in testing on X1 testnet: status read from OracleState and the on-chain line record (LineLog)."
+        sub="GERO v9.1b, the next version, in testing on X1 testnet."
         right={<AutoRefresh renderedAt={Date.now()} />}
       />
       <Grid>
         <Stat
-          label="Oracle"
+          label="Live"
           value={
             <span className="flex items-center gap-2">
               <Dot tone={v.live ? "good" : "bad"} />
@@ -36,63 +47,89 @@ export async function TestnetOracle() {
             </span>
           }
           tone={v.live ? "good" : "bad"}
+          sub={`${v.nodesOnline} of ${v.nodesListed} nodes online`}
+        />
+        <Stat
+          label="Freshness"
+          value={v.freshnessLines === null ? "—" : `${int(v.freshnessLines)} lines`}
+          tone={v.live ? "good" : "bad"}
           sub={
             v.freshnessLines === null
               ? "no on-time line in the record"
-              : `newest on-time line ${int(v.freshnessLines)} lines ago`
+              : `since the newest on-time line (≈ ${linesToDuration(v.freshnessLines)})`
           }
         />
-        <Stat
-          label="Lines produced"
-          value={int(ring.produced)}
-          sub={`with an on-time reveal, last ${int(ringLines)} lines (≈ ${linesToDuration(ringLines)})`}
-        />
-        <Stat label="Requests served" value={int(v.oracle.totalFulfillments)} sub={`of ${int(v.oracle.totalRequests)} requested`} />
-        <Stat
-          label="Nodes online"
-          value={`${v.nodesOnline} / ${v.nodesListed}`}
-          tone={v.nodesOnline > 0 ? "good" : "bad"}
-          sub="active in the node table and committing"
-        />
+        <Stat label="Requests" value={int(v.oracle.totalRequests)} sub="total requested" />
+        <Stat label="Fulfilled" value={int(v.oracle.totalFulfillments)} sub="total fulfilled" />
       </Grid>
 
-      <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
-        <Panel title="Oracle">
-          <KV
-            rows={[
-              ["Status", v.oracle.paused ? <Badge tone="bad">paused</Badge> : <Badge tone="good">running</Badge>],
-              ["Version", `${v.oracle.layout} (OracleState ${v.oracle.length} B)`],
-              [
-                "Line record",
-                v.lineLog
-                  ? v.lineLog.defect
-                    ? <Badge tone="bad">unusable: {v.lineLog.defect}</Badge>
-                    : `ABI ${v.lineLog.abiMajor}.${v.lineLog.abiMinor}, ring of ${int(v.lineLog.h)} lines`
-                  : "not created",
-              ],
-              ["Program last deployed", v.program ? `slot ${int(v.program.deploySlot)}` : "—"],
-              ["Current slot / line", `${int(v.slot)} / ${int(v.currentLine)}`],
-              ["Newest on-time line", v.newestLine === null ? "—" : int(v.newestLine)],
-              ["Program", <Addr key="p" value={NETWORK.geroProgram} />],
-            ]}
-          />
-        </Panel>
+      {pending.length > 0 && (
         <Panel
-          title="Line record, last ring"
-          note="Counted from LineLog entries whose stored line matches. Lines with no entry had no node activity. A line pays nodes only if at least one node was on time."
+          className="mt-3"
+          title={`Pending requests · ${pending.length}`}
+          note={`A request can be fulfilled until ${CANCEL_WINDOW_SLOTS} slots after it was made; after that it can only be cancelled.`}
         >
-          <KV
-            rows={[
-              ["Window", `lines ${int(ring.first)} – ${int(ring.last)}`],
-              ["With an on-time reveal", int(ring.produced)],
-              ["With a verified proof", int(ring.verified)],
-              ["With requests", int(ring.withRequests)],
-              ["Dead (no on-time reveal at batch open)", int(ring.dead)],
-              ["Settled and paid by the minter (all time)", v.linesPaidSettled === null ? "minter not initialized" : int(v.linesPaidSettled)],
-            ]}
-          />
+          <RequestTable requests={pending} href={href} slot={v.slot} window={CANCEL_WINDOW_SLOTS} />
         </Panel>
-      </div>
+      )}
+
+      <Details className="mt-3">
+        <div className="grid grid-cols-1 gap-x-8 gap-y-4 lg:grid-cols-2">
+          <div>
+            <SubHead>Oracle</SubHead>
+            <KV
+              rows={[
+                ["Status", v.oracle.paused ? <Badge tone="bad">paused</Badge> : <Badge tone="good">running</Badge>],
+                ["Version", v.oracle.layout.startsWith("unknown") ? `OracleState ${v.oracle.length} B` : `${v.oracle.layout} (OracleState ${v.oracle.length} B)`],
+                ["Program", <a key="p" className="underline decoration-term-line" href={href(NETWORK.geroProgram)} target="_blank" rel="noreferrer"><Addr value={NETWORK.geroProgram} /></a>],
+                ["Program last deployed", v.program ? `slot ${int(v.program.deploySlot)}` : "—"],
+                ["Current slot / line", `${int(v.slot)} / ${int(v.currentLine)}`],
+                ["Newest on-time line", v.newestLine === null ? "—" : int(v.newestLine)],
+              ]}
+            />
+          </div>
+          <div>
+            <SubHead>Line record</SubHead>
+            <KV
+              rows={[
+                [
+                  "Record",
+                  v.lineLog
+                    ? v.lineLog.defect
+                      ? <Badge key="d" tone="bad">unusable: {v.lineLog.defect}</Badge>
+                      : `ABI ${v.lineLog.abiMajor}.${v.lineLog.abiMinor}, ring of ${int(v.lineLog.h)} lines`
+                    : "not created",
+                ],
+                ["Window", `lines ${int(ring.first)} – ${int(ring.last)} (≈ ${linesToDuration(ringLines)})`],
+                ["With an on-time reveal", int(ring.produced)],
+                ["With a verified proof", int(ring.verified)],
+                ["With requests", int(ring.withRequests)],
+                ["Dead (no on-time reveal at batch open)", int(ring.dead)],
+                ["Settled and paid by the minter (all time)", v.linesPaidSettled === null ? "minter not initialized" : int(v.linesPaidSettled)],
+              ]}
+            />
+            <p className="mt-2 text-xs leading-relaxed text-term-text3">
+              Counted from line-record entries whose stored line matches. A line pays nodes only if at least one node was on time.
+            </p>
+          </div>
+        </div>
+        <div>
+          <SubHead>Expired requests (cancel-only) · {req ? expired.length : "?"}</SubHead>
+          {req === null ? (
+            <p className="font-mono text-sm text-term-text3">Request accounts unavailable.</p>
+          ) : expired.length === 0 ? (
+            <p className="font-mono text-sm text-term-text3">None.</p>
+          ) : (
+            <>
+              <p className="mb-2 text-xs text-term-text3">
+                Open requests past the {CANCEL_WINDOW_SLOTS}-slot fulfil window. They can no longer be fulfilled; the
+                requester can cancel them.
+              </p>
+              <RequestTable requests={expired} href={href} />
+            </>
+          )}
+        </div>
+      </Details>
     </>
   );
 }

@@ -172,3 +172,23 @@ export function HotPayoutBadge() {
     </span>
   );
 }
+
+/** Collapsed box for internals: closed by default, opened with its summary line. */
+export function Details({ title = "Details", children, className = "" }: { title?: string; children: ReactNode; className?: string }) {
+  return (
+    <details className={`group rounded-md border border-term-line bg-term-panel ${className}`}>
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 font-mono text-xs uppercase tracking-[0.14em] text-term-text2 hover:text-term-text [&::-webkit-details-marker]:hidden">
+        <span className="inline-block transition-transform group-open:rotate-90" aria-hidden="true">
+          ›
+        </span>
+        {title}
+      </summary>
+      <div className="space-y-4 border-t border-term-line px-4 pb-4 pt-3">{children}</div>
+    </details>
+  );
+}
+
+/** Small heading inside a panel or Details box. */
+export function SubHead({ children }: { children: ReactNode }) {
+  return <h3 className="mb-1 font-mono text-[11px] uppercase tracking-[0.14em] text-term-text3">{children}</h3>;
+}

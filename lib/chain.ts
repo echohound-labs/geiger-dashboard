@@ -40,6 +40,7 @@ import {
 
 // GERO lib.rs
 const ORACLE_STATE_V91B_LEN = 550; // v9.1a (502) + slash_prev + slash_from_line + pending_authority
+const ORACLE_STATE_V91C_LEN = 558; // v9.1b + request_fee_lamports after the Borsh struct (grown once by set_request_fee)
 const MAX_NODES = 8;
 const LINE_LOG_HEADER_LEN = 640;
 const LINE_ENTRY_LEN = 48;
@@ -68,7 +69,10 @@ const NS_EXT_VERSION = 1;
 export const PAYOUT_DELAY_SLOTS = 720_000; // 72 h at GERO's 0.36 s/slot assumption
 const LINE_BATCH_LEN = 382;
 const REQUEST_LEN = 138;
+const REQUEST_STATUS_PENDING = 0;
 const REQUEST_STATUS_FULFILLED = 1;
+/** Fulfil is allowed while slot <= request_slot + 138 (FULFILL_MIN_DELAY 10 + MAX_BIND_WINDOW 128); then cancel-only. */
+export const CANCEL_WINDOW_SLOTS = 138;
 const LINE_MASK_BITS = (1n << 56n) - 1n;
 
 // minter state.rs
@@ -452,7 +456,7 @@ export async function getOracleState(cfg: NetworkConfig = NETWORK): Promise<Orac
     nodes.push({ operator: key(d, o), committedThroughLine: u64(d, o + 32), active: d[o + 40] === 1 });
   }
   const layout =
-    d.length === ORACLE_STATE_V91B_LEN ? "v9.1b" : d.length === 502 ? "v9.1a" : d.length === 486 ? "v9" : `unknown (${d.length} B)`;
+    d.length === ORACLE_STATE_V91C_LEN ? "v9.1c" : d.length === ORACLE_STATE_V91B_LEN ? "v9.1b" : d.length === 502 ? "v9.1a" : d.length === 486 ? "v9" : `unknown (${d.length} B)`;
   return {
     address,
     length: d.length,
@@ -614,6 +618,26 @@ export async function getFulfilledRequests(limit: number, cfg: NetworkConfig = N
     }))
     .sort((x, y) => y.fulfilledAt - x.fulfilledAt)
     .slice(0, limit);
+}
+
+export interface OpenRequest {
+  address: string;
+  requester: string;
+  requestSlot: bigint;
+}
+
+/** Pending (status 0) RandomnessRequest accounts, split by the fulfil window at `slot`. */
+export async function getOpenRequests(slot: number, cfg: NetworkConfig = NETWORK): Promise<{ pending: OpenRequest[]; expired: OpenRequest[] }> {
+  const accts = await getProgramAccounts(cfg.geroProgram, [
+    { dataSize: REQUEST_LEN },
+    memcmp(0, disc("RandomnessRequest")),
+    memcmp(104, new Uint8Array([REQUEST_STATUS_PENDING])),
+  ]);
+  const open = accts
+    .map((a) => ({ address: a.address, requester: key(a.data, 8), requestSlot: u64(a.data, 122) }))
+    .sort((x, y) => (y.requestSlot > x.requestSlot ? 1 : -1));
+  const inWindow = (r: OpenRequest) => r.requestSlot + BigInt(CANCEL_WINDOW_SLOTS) >= BigInt(slot);
+  return { pending: open.filter(inWindow), expired: open.filter((r) => !inWindow(r)) };
 }
 
 // ─── Minter events (claims) ──────────────────────────────────────────────────
