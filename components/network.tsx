@@ -39,7 +39,7 @@ export function EntropyBanner() {
 }
 
 /** ENTROPY pages on mainnet: nothing to read yet, so point to the same page on testnet. */
-export function NotOnMainnet({ title, testnetHref }: { title: string; testnetHref: string }) {
+export function NotOnMainnet({ title, testnetHref, children }: { title: string; testnetHref: string; children?: React.ReactNode }) {
   return (
     <>
       <div className="mb-6">
@@ -54,6 +54,7 @@ export function NotOnMainnet({ title, testnetHref }: { title: string; testnetHre
           Try it on Testnet →
         </Link>
       </div>
+      {children && <div className="mt-3">{children}</div>}
     </>
   );
 }
