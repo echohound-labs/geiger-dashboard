@@ -8,6 +8,7 @@ import {
   ActivityIcon, BookIcon, ChevronsLeft, ChevronsRight, CloseIcon, CoinIcon, CompassIcon, FileIcon, HelpIcon, MenuIcon,
   NodesIcon, PlugIcon, RadarIcon, WalletIcon, type Icon,
 } from "./icons";
+import { SITE_NAME, SITE_TAGLINE } from "@/lib/config";
 import { NETS, isNet, netFromPath, switchNetPath, type NetSlug } from "@/lib/networks";
 import { SIDEBAR_KEY } from "@/lib/theme-script";
 
@@ -156,9 +157,10 @@ export function Sidebar() {
         <button type="button" className="sb-btn" aria-label="Open menu" onClick={() => setDrawerOn(pathname)}>
           <MenuIcon size={18} />
         </button>
-        <Link href={`/${net}`} className="sb-brand">
-          <span>
-            GERO<span className="text-term-text2">/hub</span>
+        <Link href={`/${net}`} className="sb-brand" aria-label={`${SITE_NAME} overview`}>
+          <span className="sb-brand-text">
+            <span>{SITE_NAME}</span>
+            <span className="sb-tagline">{SITE_TAGLINE}</span>
           </span>
         </Link>
         <span className="mobilebar-net" data-net={net}>
@@ -169,10 +171,11 @@ export function Sidebar() {
       <div className="sb-backdrop" data-open={drawerOpen} onClick={closeDrawer} />
       <aside className="sidebar" data-open={drawerOpen} aria-label="Sidebar">
         <div className="sb-top">
-          <Link href={`/${net}`} className="sb-brand" aria-label="GERO hub overview" onClick={closeDrawer}>
+          <Link href={`/${net}`} className="sb-brand" aria-label={`${SITE_NAME} overview`} onClick={closeDrawer}>
             <span className="sb-brand-short">G</span>
-            <span className="sb-label">
-              GERO<span className="text-term-text2">/hub</span>
+            <span className="sb-label sb-brand-text">
+              <span>{SITE_NAME}</span>
+              <span className="sb-tagline">{SITE_TAGLINE}</span>
             </span>
           </Link>
           <button type="button" className="sb-btn sb-close" aria-label="Close menu" onClick={closeDrawer}>

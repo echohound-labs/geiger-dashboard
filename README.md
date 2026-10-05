@@ -1,4 +1,4 @@
-# GERO Hub
+# GERO · physical randomness on X1
 
 Dashboard for the GERO randomness oracle on X1.
 

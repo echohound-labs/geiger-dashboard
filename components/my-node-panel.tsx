@@ -68,7 +68,7 @@ export function MyNodePanel() {
     return (
       <Panel>
         <p className="mb-4 text-sm text-term-text2">
-          Connect the wallet that is (or will be) a node&apos;s payout address. The hub derives its claim account
+          Connect the wallet that is (or will be) a node&apos;s payout address. This page derives its claim account
           <span className="font-mono"> [&quot;claim&quot;, wallet]</span> under the minter and reads it.
         </p>
         <WalletButton />
@@ -85,7 +85,7 @@ export function MyNodePanel() {
     <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
       <Panel title="Acting for" className="lg:col-span-2">
         <p className="text-sm text-term-text2">
-          The hub acts for <span className="font-mono text-term-text"><Addr value={wallet} /></span> only: it is the fee
+          This page acts for <span className="font-mono text-term-text"><Addr value={wallet} /></span> only: it is the fee
           payer, the payee and the only signer of every transaction on this page. Claims go to this wallet&apos;s own claim
           account and its own token account; to act for another address, connect that wallet.
         </p>

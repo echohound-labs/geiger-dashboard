@@ -210,6 +210,21 @@ html[data-sidebar="collapsed"] {
   white-space: nowrap;
   min-width: 0;
 }
+.sb-brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+  min-width: 0;
+}
+.sb-tagline {
+  font-family: var(--font-grotesk), ui-sans-serif, sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: rgb(var(--term-text3));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .sb-brand-short {
   display: none;
 }

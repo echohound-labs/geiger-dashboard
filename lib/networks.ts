@@ -30,7 +30,7 @@ export function netParam({ params }: NetParams): NetSlug {
   return params.network;
 }
 
-/** Page title with the network, e.g. "Nodes · Testnet · GERO Hub". */
+/** Page title with the network, e.g. "Nodes · Testnet · GERO · physical randomness on X1". */
 export function netMetadata(title: string) {
   return ({ params }: NetParams) => ({
     title: isNet(params.network) ? `${title} · ${params.network === "mainnet" ? "Mainnet" : "Testnet"}` : title,

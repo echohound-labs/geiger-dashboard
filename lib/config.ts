@@ -13,6 +13,10 @@
  * (server only).
  */
 
+/** Site name and tagline: sidebar brand and page titles. */
+export const SITE_NAME = "GERO";
+export const SITE_TAGLINE = "physical randomness on X1";
+
 export type NetworkName = "testnet" | "mainnet";
 
 export interface NetworkConfig {
