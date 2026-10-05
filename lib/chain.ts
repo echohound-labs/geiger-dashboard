@@ -67,6 +67,11 @@ const NS_LEN = 2_888; // 8 + size_of::<NodeStream>() (2,880)
 const NS_LEN_V91 = 3_336; // NS_LEN + NS_EXT_LEN (448)
 const NS_EXT_VERSION = 1;
 export const PAYOUT_DELAY_SLOTS = 720_000; // 72 h at GERO's 0.36 s/slot assumption
+export const NODE_APPROVAL_DELAY_SLOTS = 1_680_000; // the 7-day shadow week at 0.36 s/slot
+/** An inactive node with no commit for this many lines (≈ 30 days at 2.94 s/line) is shown as legacy. */
+const LEGACY_AFTER_LINES = 881_633n;
+/** Lines in each node card's sparkline. */
+export const RECENT_LINES = 48;
 const LINE_BATCH_LEN = 382;
 const REQUEST_LEN = 138;
 const REQUEST_STATUS_PENDING = 0;
@@ -804,6 +809,14 @@ export interface NodeView {
   missesOpen: number;
   claim: ClaimAccount | null;
   claimAddress: string;
+  /** Shadow week end and slots left, while shadow and the approval slot is known. */
+  shadowEnds: { slot: bigint; slotsLeft: number } | null;
+  /** On-time bit for each of the last RECENT_LINES final lines, oldest first (earning nodes only). */
+  recent: { line: bigint; onTime: boolean }[];
+  /** Consecutive on-time final lines ending at the newest one. */
+  streak: number;
+  /** Inactive and no commit for 30+ days. */
+  legacy: boolean;
 }
 
 export interface NodesView {
@@ -866,7 +879,15 @@ export async function getNodesView(windowLines = 2048): Promise<NodesView> {
       if (afl !== null && afl > currentLine) statusNote = `earns from line ${afl}`;
     }
     let onTime: NodeView["onTime"] = null;
+    const recent: NodeView["recent"] = [];
+    let streak = 0;
     if (afl !== null && !shadow) {
+      const hit = (L: bigint) => {
+        const e = entries.get(L);
+        return !!(e && e.flags & LINE_FLAG_FINAL && e.onTimeMask & (1 << n.index));
+      };
+      for (let L = last - BigInt(RECENT_LINES) + 1n; L <= last; L++) if (L >= afl) recent.push({ line: L, onTime: hit(L) });
+      for (let L = last; L >= first && L >= afl && hit(L); L--) streak++;
       const from = afl > first ? afl : first;
       let lines = 0;
       let hits = 0;
@@ -887,6 +908,13 @@ export async function getNodesView(windowLines = 2048): Promise<NodesView> {
       if (b.slashedMask & bit) slashesOpen++;
     }
     const ext = stream?.ext ?? null;
+    const shadowEnds =
+      shadow && ext && ext.approvedSlot > 0n
+        ? (() => {
+            const end = ext.approvedSlot + BigInt(NODE_APPROVAL_DELAY_SLOTS);
+            return { slot: end, slotsLeft: Math.max(0, Number(end) - slot) };
+          })()
+        : null;
     const pendingPayout =
       ext && ext.pendingPayout
         ? { to: ext.pendingPayout, applySlot: ext.payoutApplySlot, slotsLeft: Math.max(0, Number(ext.payoutApplySlot) - slot) }
@@ -906,6 +934,10 @@ export async function getNodesView(windowLines = 2048): Promise<NodesView> {
       missesOpen,
       claim: claims.get(payouts[k]) ?? null,
       claimAddress: claimAddress(payouts[k]),
+      shadowEnds,
+      recent,
+      streak,
+      legacy: !n.active && n.committedThroughLine + LEGACY_AFTER_LINES < currentLine,
     };
   });
   return {

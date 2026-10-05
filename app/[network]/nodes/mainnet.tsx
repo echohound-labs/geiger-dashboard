@@ -1,13 +1,21 @@
 import { AutoRefresh } from "@/components/auto-refresh";
-import { ErrorPanel, PageTitle, Panel, Table } from "@/components/ui";
-import { mainnetAddress } from "@/lib/config";
-import { int, short, timeAgo, utc } from "@/lib/format";
-import { ONLINE_THRESHOLD_S, getMainnetNodes } from "@/lib/mainnet";
+import { BecomeOperator, NodeCard } from "@/components/node-card";
+import { Addr, Badge, ErrorPanel, PageTitle, Panel, type Tone } from "@/components/ui";
+import { MAINNET_ORACLE, mainnetAddress } from "@/lib/config";
+import { int, timeAgo, utc } from "@/lib/format";
+import { LEGACY_AFTER_S, ONLINE_THRESHOLD_S, getMainnetNodes, type MainnetNode } from "@/lib/mainnet";
 
+function status(n: MainnetNode): { tone: Tone; text: string } {
+  if (n.legacy) return { tone: "muted", text: "legacy" };
+  if (n.online && n.active) return { tone: "good", text: "active" };
+  return { tone: "bad", text: "offline" };
+}
+
+// Reads the EntropyNode accounts only.
 export async function MainnetNodes() {
-  let v;
+  let nodes: MainnetNode[];
   try {
-    v = { nodes: await getMainnetNodes() };
+    nodes = await getMainnetNodes();
   } catch (e) {
     return (
       <>
@@ -17,36 +25,61 @@ export async function MainnetNodes() {
     );
   }
   const now = Date.now() / 1000;
+  const sorted = [...nodes].sort((a, b) => Number(a.legacy) - Number(b.legacy));
   return (
     <>
-      <PageTitle title="Nodes" network="mainnet" sub="Registered GERO v8.1 nodes on X1 mainnet, read from their EntropyNode accounts." right={<AutoRefresh renderedAt={Date.now()} />} />
+      <PageTitle
+        title="Nodes"
+        network="mainnet"
+        sub={`Registered GERO ${MAINNET_ORACLE.version} nodes on X1 mainnet.`}
+        right={<AutoRefresh renderedAt={Date.now()} />}
+      />
       <div className="grid grid-cols-1 gap-3">
-        <Panel
-          title="Nodes"
-          note={`Online = last submission within ${ONLINE_THRESHOLD_S / 60} min. Sorted by submissions.`}
-        >
-          {v.nodes === null ? (
-            <p className="font-mono text-sm text-term-text3">Node accounts unavailable.</p>
-          ) : (
-            <Table
-              head={["Status", "Node", "Submissions", "Last submission", "Reputation", "Approved"]}
-              rows={v.nodes.map((n) => [
-                <span key="s" className={n.online ? "text-term-green" : "text-term-red"}>
-                  {n.online ? "● online" : "○ offline"}
-                </span>,
-                <a key="a" className="underline decoration-term-line" href={mainnetAddress(n.address)} target="_blank" rel="noreferrer" title={n.address}>
-                  {short(n.address, 8)}
-                </a>,
-                int(n.submissions),
-                <span key="l" title={utc(n.lastSubmission)}>{timeAgo(n.lastSubmission, now)}</span>,
-                `${n.reputation}/100`,
-                n.approved ? <span key="ap" className="text-term-green">yes</span> : <span key="ap" className="text-term-text3">no</span>,
-              ])}
-              empty="No registered nodes found."
+        {sorted.length === 0 && <Panel>No registered nodes found.</Panel>}
+        {sorted.map((n) => {
+          const s = status(n);
+          return (
+            <NodeCard
+              key={n.address}
+              legacy={n.legacy}
+              name={n.name || "Unnamed node"}
+              sub={
+                <a className="underline decoration-term-line" href={mainnetAddress(n.address)} target="_blank" rel="noreferrer">
+                  <Addr value={n.address} />
+                </a>
+              }
+              badges={
+                <>
+                  <Badge tone={s.tone}>{s.text}</Badge>
+                  {n.approved ? <Badge tone="good">approved</Badge> : <Badge tone="muted">not approved</Badge>}
+                </>
+              }
+              left={[
+                ["Submissions", int(n.submissions)],
+                [
+                  "Last submission",
+                  <span key="l" title={utc(n.lastSubmission)}>
+                    {n.lastSubmission ? timeAgo(n.lastSubmission, now) : "never"}
+                  </span>,
+                ],
+                ["Reputation", `${n.reputation}/100`],
+              ]}
+              right={[
+                ["Operator", <Addr key="o" value={n.operator} />],
+                ["Registered", n.registeredAt ? <span key="r" title={utc(n.registeredAt)}>{utc(n.registeredAt).slice(0, 10)}</span> : "—"],
+                ["Active flag", n.active ? "yes" : "no"],
+              ]}
             />
-          )}
-        </Panel>
+          );
+        })}
+        <BecomeOperator />
       </div>
+      <p className="mt-4 text-xs leading-relaxed text-term-text3">
+        <span className="text-term-text2">Active</span> = active flag set and a submission within the last{" "}
+        {ONLINE_THRESHOLD_S / 60} min; <span className="text-term-text2">offline</span> otherwise;{" "}
+        <span className="text-term-text2">legacy</span> = not approved and not seen for {LEGACY_AFTER_S / 86400}+ days.
+        GERO {MAINNET_ORACLE.version} has no shadow period, line record or ENTROPY payouts.
+      </p>
     </>
   );
 }

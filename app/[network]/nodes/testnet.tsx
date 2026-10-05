@@ -1,10 +1,113 @@
 import { AutoRefresh } from "@/components/auto-refresh";
-import { Addr, Badge, ErrorPanel, HOT_PAYOUT_NOTE, HotPayoutBadge, KV, PageTitle, Panel, type Tone } from "@/components/ui";
-import { PAYOUT_DELAY_SLOTS, getNodesView, type NodeStatus, type NodesView } from "@/lib/chain";
+import { BecomeOperator, LineStrip, NodeCard } from "@/components/node-card";
+import { Addr, Badge, ErrorPanel, HOT_PAYOUT_NOTE, HotPayoutBadge, PageTitle, Panel, type Tone } from "@/components/ui";
+import { PAYOUT_DELAY_SLOTS, getNodesView, type NodeView, type NodesView } from "@/lib/chain";
 import { NETWORK } from "@/lib/config";
 import { amount, int, linesToDuration, pct, slotsToDuration, xnt } from "@/lib/format";
 
-const statusTone: Record<NodeStatus, Tone> = { active: "good", shadow: "warn", offline: "bad" };
+function statusBadge(n: NodeView): { tone: Tone; text: string } {
+  if (n.legacy) return { tone: "muted", text: "legacy" };
+  if (n.status === "active") return { tone: "good", text: "active" };
+  if (n.status === "shadow")
+    return {
+      tone: "warn",
+      text: n.shadowEnds
+        ? n.shadowEnds.slotsLeft > 0
+          ? `shadow · ${slotsToDuration(n.shadowEnds.slotsLeft)} left`
+          : "shadow · week over, can be activated"
+        : "shadow",
+    };
+  return { tone: "bad", text: "offline" };
+}
+
+function Card({ n, required }: { n: NodeView; required: bigint }) {
+  const s = statusBadge(n);
+  const hot = n.payout === n.operator;
+  const sym = NETWORK.symbol;
+  const earned = n.claim ? n.claim.accrued + n.claim.totalClaimed : null;
+  const recentHits = n.recent.filter((r) => r.onTime).length;
+  return (
+    <NodeCard
+      legacy={n.legacy}
+      name={`Node ${n.index}`}
+      sub={<>slot {n.index} · {n.statusNote || "—"}</>}
+      badges={
+        <>
+          <Badge tone={s.tone}>{s.text}</Badge>
+          {hot ? <HotPayoutBadge /> : <Badge tone="good">separate payout key</Badge>}
+        </>
+      }
+      left={[
+        [
+          "On time",
+          n.onTime ? (
+            <span key="ot">
+              {pct(n.onTime.hits, n.onTime.lines)}{" "}
+              <span className="text-term-text3">
+                ({int(n.onTime.hits)} / {int(n.onTime.lines)} lines)
+              </span>
+            </span>
+          ) : (
+            "— (not earning yet)"
+          ),
+        ],
+        [
+          `Last ${n.recent.length || "—"} lines`,
+          n.recent.length ? (
+            <span key="sp" className="inline-flex flex-wrap items-center justify-end gap-2">
+              <LineStrip lines={n.recent} />
+              <span className="text-term-text3">
+                {recentHits}/{n.recent.length}
+              </span>
+            </span>
+          ) : (
+            "—"
+          ),
+        ],
+        ["Current streak", n.onTime ? `${int(n.streak)} line${n.streak === 1 ? "" : "s"} on time` : "—"],
+        [
+          "Stake / required",
+          n.stakeLamports === null ? (
+            "no stream account"
+          ) : (
+            <span key="st" className={n.stakeLamports < required ? "text-term-amber" : undefined}>
+              {xnt(n.stakeLamports)} / {xnt(required)}
+            </span>
+          ),
+        ],
+        ["Missed / slashed (open batches)", `${n.missesOpen} / ${n.slashesOpen}`],
+      ]}
+      right={[
+        [`${sym} earned`, earned === null ? "no claim account yet" : amount(earned)],
+        ["Claimed", n.claim ? amount(n.claim.totalClaimed) : "—"],
+        ["Claimable", n.claim ? amount(n.claim.accrued) : "—"],
+        ["Payout address", <Addr key="p" value={n.payout} />],
+        [
+          "Pending payout change",
+          n.pendingPayout ? (
+            <span key="pp" className="text-term-amber">
+              <Addr value={n.pendingPayout.to} />
+              <br />
+              {n.pendingPayout.slotsLeft > 0
+                ? `applies in ≈ ${slotsToDuration(n.pendingPayout.slotsLeft)} (${int(n.pendingPayout.slotsLeft)} slots)`
+                : "72 h delay over; anyone can apply it"}
+            </span>
+          ) : (
+            "none"
+          ),
+        ],
+      ]}
+      footer={
+        <>
+          {hot && <p className="font-mono text-xs text-term-amber">⚠ {HOT_PAYOUT_NOTE}</p>}
+          <p className="mt-1 font-mono text-xs text-term-text3">
+            node key <Addr value={n.operator} />
+          </p>
+        </>
+      }
+    />
+  );
+}
 
 export async function TestnetNodes() {
   let v: NodesView;
@@ -18,12 +121,13 @@ export async function TestnetNodes() {
       </>
     );
   }
+  const nodes = [...v.nodes].sort((a, b) => Number(a.legacy) - Number(b.legacy) || a.index - b.index);
   return (
     <>
       <PageTitle
         network="testnet"
         title="Nodes"
-        sub={`Every node in GERO's table. On-time rate is over the last ${int(v.window)} final lines (≈ ${linesToDuration(v.window)}) of the line record. Required stake ${xnt(v.requiredStakeLamports)}, slash ${xnt(v.slashLamports)} per missed line.`}
+        sub={`Every node in GERO's table. On-time rate over the last ${int(v.window)} final lines (≈ ${linesToDuration(v.window)}).`}
         right={<AutoRefresh renderedAt={Date.now()} />}
       />
       {v.lineLogDefect && (
@@ -31,78 +135,20 @@ export async function TestnetNodes() {
           Line record unusable ({v.lineLogDefect}): on-time rates and payouts below are incomplete.
         </div>
       )}
-      {v.nodes.length === 0 && <Panel>No nodes in the table.</Panel>}
       <div className="grid grid-cols-1 gap-3">
-        {v.nodes.map((n) => {
-          const earned = n.claim ? n.claim.accrued + n.claim.totalClaimed : null;
-          return (
-            <Panel key={n.index}>
-              <div className="mb-3 flex flex-wrap items-center gap-3">
-                <span className="font-mono text-sm text-term-text2">slot {n.index}</span>
-                <Badge tone={statusTone[n.status]}>{n.status}</Badge>
-                {n.statusNote && <span className="font-mono text-xs text-term-text3">{n.statusNote}</span>}
-                {n.payout === n.operator && <HotPayoutBadge />}
-              </div>
-              {n.payout === n.operator && <p className="mb-3 font-mono text-xs text-term-amber">⚠ {HOT_PAYOUT_NOTE}</p>}
-              <div className="grid grid-cols-1 gap-x-8 lg:grid-cols-2">
-                <KV
-                  rows={[
-                    ["Operator", <Addr key="o" value={n.operator} />],
-                    ["Payout address", <Addr key="p" value={n.payout} />],
-                    [
-                      "Pending payout change",
-                      n.pendingPayout ? (
-                        <span key="pp" className="text-term-amber">
-                          <Addr value={n.pendingPayout.to} />
-                          <br />
-                          {n.pendingPayout.slotsLeft > 0
-                            ? `applies in ${int(n.pendingPayout.slotsLeft)} slots (≈ ${slotsToDuration(n.pendingPayout.slotsLeft)}), slot ${int(n.pendingPayout.applySlot)}`
-                            : `delay over since slot ${int(n.pendingPayout.applySlot)}; anyone can apply it`}
-                        </span>
-                      ) : (
-                        "none"
-                      ),
-                    ],
-                    ["Earns from line", n.activeFromLine === null ? "—" : int(n.activeFromLine)],
-                    ["Committed through line", int(n.committedThroughLine)],
-                  ]}
-                />
-                <KV
-                  rows={[
-                    [
-                      "On-time rate",
-                      n.onTime ? (
-                        <span key="ot">
-                          {pct(n.onTime.hits, n.onTime.lines)}{" "}
-                          <span className="text-term-text3">
-                            ({int(n.onTime.hits)} / {int(n.onTime.lines)})
-                          </span>
-                        </span>
-                      ) : (
-                        "— (not earning yet)"
-                      ),
-                    ],
-                    ["Stake", n.stakeLamports === null ? "no stream account" : xnt(n.stakeLamports)],
-                    ["Missed / slashed (open batches)", `${n.missesOpen} / ${n.slashesOpen}`],
-                    [`${NETWORK.symbol} earned`, earned === null ? "no claim account yet" : amount(earned)],
-                    [
-                      "  claimed · claimable",
-                      n.claim ? `${amount(n.claim.totalClaimed)} · ${amount(n.claim.accrued)}` : "—",
-                    ],
-                  ]}
-                />
-              </div>
-            </Panel>
-          );
-        })}
+        {nodes.length === 0 && <Panel>No nodes in the table.</Panel>}
+        {nodes.map((n) => (
+          <Card key={n.index} n={n} required={v.requiredStakeLamports} />
+        ))}
+        <BecomeOperator stake={xnt(v.requiredStakeLamports)} slash={xnt(v.slashLamports)} />
       </div>
       <p className="mt-4 text-xs leading-relaxed text-term-text3">
-        Status: <span className="text-term-text2">active</span> = in the table and committing;{" "}
-        <span className="text-term-text2">shadow</span> = in its probation week, earns nothing and sets no line bits;{" "}
-        <span className="text-term-text2">offline</span> = inactive, or no commit within the last few lines. Payout changes wait{" "}
-        {int(PAYOUT_DELAY_SLOTS)} slots (72 h as designed). Slashes are counted from line batches that are still open (they
-        close 512 slots after their line); a lifetime count needs an indexer. Earned = claimed + claimable on the payout
-        address&apos;s claim account; lines not yet settled are not included.
+        <span className="text-term-text2">Active</span> = in the table and committing;{" "}
+        <span className="text-term-text2">shadow</span> = in its 7-day probation, earns nothing and sets no line bits;{" "}
+        <span className="text-term-text2">offline</span> = inactive, or no commit within the last few lines;{" "}
+        <span className="text-term-text2">legacy</span> = inactive and not seen for 30+ days. Payout changes wait{" "}
+        {int(PAYOUT_DELAY_SLOTS)} slots (72 h as designed). Missed and slashed lines are counted from line batches that are
+        still open (about the last 64 lines). Earned = claimed + claimable; lines not yet settled are not included.
       </p>
     </>
   );
