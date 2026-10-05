@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { ThemeToggle } from "./theme";
 
 const GROUPS = [
   { tag: "Mainnet", tone: "text-term-green", items: [{ href: "/", label: "Oracle" }] },
@@ -53,6 +54,7 @@ export function SiteHeader() {
             </div>
           ))}
         </nav>
+        <ThemeToggle />
       </div>
     </header>
   );

@@ -2,14 +2,69 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Theme tokens. Colours are RGB channels for Tailwind's term-* colours (tailwind.config.ts).
+   Dark is the energy-green terminal palette; light is white/grey with the same green, darkened
+   enough to read on white. data-theme is set before paint by THEME_SCRIPT (lib/theme-script.ts);
+   without it the device setting decides. */
 :root {
   color-scheme: dark;
+  --term-bg: 8 12 10;
+  --term-panel: 13 19 15;
+  --term-raised: 17 24 16;
+  --term-line: rgba(0, 255, 100, 0.12);
+  --term-line-strong: rgba(0, 255, 100, 0.24);
+  --term-green: 0 255 100;
+  --term-green-dim: 0 204 80;
+  --term-text: 200 255 216;
+  --term-text2: 122 173 138;
+  --term-text3: 94 142 107;
+  --term-amber: 255 179 0;
+  --term-red: 255 92 92;
+  --overlay: rgba(0, 0, 0, 0.7);
+  --shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --term-bg: 244 246 245;
+  --term-panel: 255 255 255;
+  --term-raised: 238 242 239;
+  --term-line: rgba(19, 32, 26, 0.12);
+  --term-line-strong: rgba(19, 32, 26, 0.24);
+  --term-green: 0 122 53;
+  --term-green-dim: 0 107 46;
+  --term-text: 19 32 26;
+  --term-text2: 63 90 74;
+  --term-text3: 85 112 96;
+  --term-amber: 138 83 0;
+  --term-red: 192 38 45;
+  --overlay: rgba(19, 32, 26, 0.45);
+  --shadow: 0 16px 48px rgba(19, 32, 26, 0.16);
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    color-scheme: light;
+    --term-bg: 244 246 245;
+    --term-panel: 255 255 255;
+    --term-raised: 238 242 239;
+    --term-line: rgba(19, 32, 26, 0.12);
+    --term-line-strong: rgba(19, 32, 26, 0.24);
+    --term-green: 0 122 53;
+    --term-green-dim: 0 107 46;
+    --term-text: 19 32 26;
+    --term-text2: 63 90 74;
+    --term-text3: 85 112 96;
+    --term-amber: 138 83 0;
+    --term-red: 192 38 45;
+    --overlay: rgba(19, 32, 26, 0.45);
+    --shadow: 0 16px 48px rgba(19, 32, 26, 0.16);
+  }
 }
 
 html,
 body {
-  background: #080c0a;
-  color: #c8ffd8;
+  background: rgb(var(--term-bg));
+  color: rgb(var(--term-text));
 }
 
 body {
@@ -17,29 +72,29 @@ body {
 }
 
 ::selection {
-  background: rgba(0, 255, 100, 0.25);
+  background: rgb(var(--term-green) / 0.25);
 }
 
 a {
   text-underline-offset: 3px;
 }
 
-/* Wallet adapter button, restyled to the terminal palette. */
+/* Wallet adapter button and modal, restyled to the theme. */
 .gero-wallet .wallet-adapter-button,
 .gero-wallet .wallet-adapter-button-trigger {
   height: 34px;
   padding: 0 14px;
   border-radius: 4px;
-  border: 1px solid rgba(0, 255, 100, 0.35);
+  border: 1px solid rgb(var(--term-green) / 0.35);
   background: transparent;
-  color: #00ff64;
+  color: rgb(var(--term-green));
   font-family: var(--font-term), ui-monospace, monospace;
   font-size: 13px;
   font-weight: 400;
   letter-spacing: 0.04em;
 }
 .gero-wallet .wallet-adapter-button:not([disabled]):hover {
-  background: rgba(0, 255, 100, 0.08);
+  background: rgb(var(--term-green) / 0.08);
 }
 .gero-wallet .wallet-adapter-button-start-icon {
   width: 18px;
@@ -50,12 +105,34 @@ a {
   width: 150px;
   height: 34px;
 }
-.wallet-adapter-modal-wrapper {
-  background: #0d130f;
-  border: 1px solid rgba(0, 255, 100, 0.24);
+:root .wallet-adapter-modal-wrapper {
+  background: rgb(var(--term-panel));
+  border: 1px solid var(--term-line-strong);
+  color: rgb(var(--term-text));
   font-family: var(--font-grotesk), ui-sans-serif, sans-serif;
 }
-.wallet-adapter-dropdown-list {
-  background: #0d130f;
-  border: 1px solid rgba(0, 255, 100, 0.24);
+:root .wallet-adapter-modal-title,
+:root .wallet-adapter-modal-list .wallet-adapter-button,
+:root .wallet-adapter-modal-list-more {
+  color: rgb(var(--term-text));
 }
+:root .wallet-adapter-modal-list .wallet-adapter-button:not([disabled]):hover {
+  background: rgb(var(--term-raised));
+}
+:root .wallet-adapter-modal-button-close {
+  background: rgb(var(--term-raised));
+}
+:root .wallet-adapter-modal-button-close svg {
+  fill: rgb(var(--term-text2));
+}
+:root .wallet-adapter-dropdown-list {
+  background: rgb(var(--term-panel));
+  border: 1px solid var(--term-line-strong);
+}
+:root .wallet-adapter-dropdown-list-item {
+  color: rgb(var(--term-text));
+}
+:root .wallet-adapter-dropdown-list-item:not([disabled]):hover {
+  background: rgb(var(--term-raised));
+}
+

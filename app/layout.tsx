@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import { Share_Tech_Mono, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
+import { ThemeSync } from "@/components/theme";
 import { MAINNET_ORACLE, TESTNET } from "@/lib/config";
+import { THEME_SCRIPT } from "@/lib/theme-script";
 
 const term = Share_Tech_Mono({ subsets: ["latin"], weight: "400", variable: "--font-term", display: "swap" });
 const grotesk = Space_Grotesk({ subsets: ["latin"], weight: ["400", "500", "600"], variable: "--font-grotesk", display: "swap" });
@@ -14,8 +16,13 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${term.variable} ${grotesk.variable}`}>
+    // data-theme is set by THEME_SCRIPT before first paint, hence suppressHydrationWarning
+    <html lang="en" className={`${term.variable} ${grotesk.variable}`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
       <body className="min-h-screen bg-term-bg font-sans text-term-text antialiased">
+        <ThemeSync />
         <SiteHeader />
         <main className="mx-auto w-full max-w-6xl px-4 pb-16 pt-6 sm:px-6">{children}</main>
         <footer className="mx-auto w-full max-w-6xl px-4 pb-8 font-mono text-xs text-term-text3 sm:px-6">

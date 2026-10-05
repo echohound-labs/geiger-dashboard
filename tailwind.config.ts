@@ -1,25 +1,30 @@
 import type { Config } from "tailwindcss";
 
 // Terminal-green palette carried over from geiger-dashboard, with the glow
-// and scanline effects dropped and contrast checked against the background.
+// and scanline effects dropped. Every colour is a CSS variable (app/globals.css)
+// holding RGB channels, so the dark and light themes swap them and the
+// Tailwind opacity modifiers (border-term-amber/50) keep working.
+const v = (name: string) => `rgb(var(--term-${name}) / <alpha-value>)`;
+
 const config: Config = {
   content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}"],
   theme: {
     extend: {
       colors: {
         term: {
-          bg: "#080c0a",
-          panel: "#0d130f",
-          raised: "#111810",
-          line: "rgba(0,255,100,0.12)",
-          lineStrong: "rgba(0,255,100,0.24)",
-          green: "#00ff64",
-          greenDim: "#00cc50",
-          text: "#c8ffd8",
-          text2: "#7aad8a",
-          text3: "#4f7d5c",
-          amber: "#ffb300",
-          red: "#ff5c5c",
+          bg: v("bg"),
+          panel: v("panel"),
+          raised: v("raised"),
+          // Hairlines carry their own alpha.
+          line: "var(--term-line)",
+          lineStrong: "var(--term-line-strong)",
+          green: v("green"),
+          greenDim: v("green-dim"),
+          text: v("text"),
+          text2: v("text2"),
+          text3: v("text3"),
+          amber: v("amber"),
+          red: v("red"),
         },
       },
       fontFamily: {
