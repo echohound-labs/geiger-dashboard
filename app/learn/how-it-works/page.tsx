@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { EntropyBanner } from "@/components/network";
 import { PageTitle, Panel, Table } from "@/components/ui";
-import { MAINNET_ORACLE, TESTNET } from "@/lib/config";
+import { GERO_WHITE_PAPER_URL, MAINNET_ORACLE, TESTNET } from "@/lib/config";
 
 export const metadata = { title: "How it works" };
 
@@ -48,6 +48,13 @@ export default function HowItWorksPage() {
               GERO is a randomness oracle on X1 whose entropy comes from physical radioactive decay measured by Geiger
               counters run by independent node operators. Every 8 slots it produces one <em>line</em>: one random result,
               verified on-chain, that consumers such as Forge Launch use for NFT mints.
+            </P>
+            <P>
+              The{" "}
+              <a className={link} href={GERO_WHITE_PAPER_URL} target="_blank" rel="noreferrer">
+                GERO White Paper v0.1 (PDF)
+              </a>{" "}
+              describes the oracle in full: how results are built, the two versions, nodes, and its security limits.
             </P>
           </Panel>
           <Panel title="Lines">
@@ -160,7 +167,7 @@ export default function HowItWorksPage() {
         <p className="text-sm text-term-text2">
           Full details, figures and risks are in the{" "}
           <Link className={link} href="/learn/white-paper">
-            white paper
+            GERO and ENTROPY white papers
           </Link>
           .
         </p>

@@ -133,3 +133,6 @@ export const MEASURED_SLOT_SECONDS = 0.3675;
 
 /** Public ENTROPY white paper, served from public/. It carries the "Public for testnet testing" header. */
 export const WHITE_PAPER_URL = "/ENTROPY_WHITEPAPER_v0.1.pdf";
+
+/** Public GERO (oracle) white paper, served from public/. Page 1 carries "Draft. Public for testnet testing." */
+export const GERO_WHITE_PAPER_URL = "/GERO_WHITEPAPER_v0.1.pdf";

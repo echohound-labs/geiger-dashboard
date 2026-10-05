@@ -10,7 +10,8 @@ Dashboard for the GERO randomness oracle on X1.
 Every data page lives under `/[network]` (`overview`, `oracle`, `nodes`, `activity`, `integrations`, `entropy`, `claim`),
 and the sidebar's Mainnet | Testnet switch keeps the page. ENTROPY is not launched on mainnet: `/mainnet/entropy` and
 `/mainnet/claim` say so and link to testnet. Every testnet page carries the tENTROPY banner. Learn pages are under
-`/learn/*` (How it works, How to test, White paper). The public white paper is served from `public/ENTROPY_WHITEPAPER_v0.1.pdf`. Old routes redirect (`/` →
+`/learn/*` (How it works, How to test, White paper). The public white papers are served from `public/GERO_WHITEPAPER_v0.1.pdf` (the oracle) and
+`public/ENTROPY_WHITEPAPER_v0.1.pdf` (the token); Learn → White papers lists both. Old routes redirect (`/` →
 `/mainnet`, `/about` → `/learn/how-it-works`, `/testnet/my-node` → `/testnet/claim`; see `next.config.mjs`).
 
 Light and dark themes come from CSS variables in `app/globals.css`; the default follows the device setting and a choice
@@ -42,7 +43,7 @@ the wallet in the browser). Defaults are the public X1 RPC endpoints.
 | `lib/networks.ts` | the `/[network]` segment: `mainnet` or `testnet`, 404 otherwise; same page on the other network |
 | `app/[network]/page.tsx` | Overview: GERO and ENTROPY cards for the selected network |
 | `app/[network]/<page>/{mainnet,testnet}.tsx` | each page's view per network; `page.tsx` picks one. The layout adds the tENTROPY banner and the wallet on testnet |
-| `app/learn/*` | How it works (GERO / ENTROPY / Nodes), How to test, White paper (summary + PDF link) |
+| `app/learn/*` | How it works (GERO / ENTROPY / Nodes), How to test, White papers (GERO and ENTROPY, summary + PDF each) |
 | `components/footer.tsx` | footer on every page: no-audit / no-legal-review warning, GitHub link, program addresses per network |
 | `components/node-card.tsx` | node cards, the on-time sparkline and the Become a node operator box |
 | `components/claim-lookup.tsx` | read-only claim-account lookup for any address (no wallet) |

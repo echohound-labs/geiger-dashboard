@@ -1,85 +1,69 @@
-import { PageTitle, Panel } from "@/components/ui";
-import { WHITE_PAPER_URL } from "@/lib/config";
+import { Badge, PageTitle, Panel } from "@/components/ui";
+import { GERO_WHITE_PAPER_URL, WHITE_PAPER_URL } from "@/lib/config";
 
-export const metadata = { title: "White paper" };
+export const metadata = { title: "White papers" };
 
-// Summary of ENTROPY_WHITEPAPER_v0.1.md (the public paper); figures are copied from it.
+// One-paragraph summaries of the two public papers (GERO_WHITEPAPER_v0.1.pdf, ENTROPY_WHITEPAPER_v0.1.md/.pdf).
+// Nothing here goes beyond what they state.
 
-const figures: [string, string][] = [
-  ["Maximum supply", "21,000,000 ENTROPY, fixed in the minter"],
-  ["Genesis liquidity", "10% · 2,100,000, minted once, paired with 2,000 XNT on Forge Swap"],
-  ["Mined", "90% · 18,900,000, paid line by line to on-time nodes, provers and the ecosystem vault"],
-  ["Halving", "every 16,089,796 lines (about 18 months at the measured slot time)"],
-  ["First-era reward", "0.587328764 ENTROPY per line"],
-  ["Per-line split", "80 / 10 / 10 with a verified prover, 90 / 0 / 10 without"],
-  ["Mint key", "none: the mint authority belongs to the minter program"],
-];
-
-const contents = [
-  "Executive summary and design principles",
-  "Token specification, supply and allocation",
-  "Emission schedule, with the era table",
-  "How mining works, and the three programs",
-  "Genesis liquidity and the ecosystem vault",
-  "Node operators: joining, keys, bond and slashing",
-  "Utility, and the relationship to FORGE",
-  "Security and transparency, keys and trust",
-  "Regulatory design considerations and risks",
-  "Launch sequence",
+const papers = [
+  {
+    title: "GERO White Paper v0.1",
+    about: "the oracle",
+    date: "draft, October 5, 2026",
+    href: GERO_WHITE_PAPER_URL,
+    file: "GERO_WHITEPAPER_v0.1.pdf",
+    summary:
+      "How GERO turns decay measured by a Geiger counter into on-chain randomness: nodes commit to hidden seeds before any request exists, the seeds are combined with the hash of a future slot and passed through a verifiable delay function, whose proof is checked on-chain from v9.1c. It covers the two live versions (v8.1 on mainnet, v9.1c on testnet with the line record and the request fee), what nodes stake and when they are slashed, and the security limits stated plainly: one operator and one node today, slashing that does not yet deter, a trusted setup for the RSA modulus, and upgrade keys that can change every rule.",
+  },
+  {
+    title: "ENTROPY White Paper v0.1",
+    about: "the token",
+    date: "draft, October 4, 2026",
+    href: WHITE_PAPER_URL,
+    file: "ENTROPY_WHITEPAPER_v0.1.pdf",
+    summary:
+      "ENTROPY is a mined, hard-capped utility token for GERO. 10% of the 21,000,000 cap is minted once as genesis liquidity; the other 90% is paid out line by line, by a minter program nobody holds a key to, to the nodes that were on time, the prover and an ecosystem vault, halving every 16,089,796 lines. The paper covers the supply and schedule, how mining reads GERO's line record, the genesis pool and its lock, the vault's spending limits, every key and what it can do, the risks, and the launch sequence. Mainnet is not launched.",
+  },
 ];
 
 export default function WhitePaperPage() {
   return (
     <>
-      <PageTitle title="White paper" network="both" sub="ENTROPY white paper v0.1 · draft, October 4, 2026" />
-
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[2fr_1fr]">
-        <Panel title="Summary">
-          <div className="space-y-3 text-[15px] leading-relaxed text-term-text">
-            <p>
-              ENTROPY is a mined, hard-capped utility token for the GERO physical-randomness oracle on X1. Every non-genesis
-              token is paid out, line by line, to the node operators and provers whose work produced that line, by a minter
-              program that nobody holds a key to and that becomes immutable before trading opens.
-            </p>
-            <p>
-              The paper describes the token, its fixed supply and halving schedule, how the minter reads GERO&apos;s line
-              record, the genesis liquidity and its lock, the ecosystem vault&apos;s spending limits, what node operators
-              need, every key and what it can do, the risks, and the steps left before a mainnet launch.
-            </p>
-            <p className="text-term-text2">
-              It is a draft, public for testnet testing; mainnet is not launched and parameters may be revised before
-              deployment. It is not an offer to sell anything and promises no return or value.
-            </p>
-          </div>
-          <a
-            href={WHITE_PAPER_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-4 inline-flex items-center rounded border border-term-green/50 px-4 py-2 font-mono text-sm text-term-green hover:bg-term-green/10"
-          >
-            Read the white paper (PDF) →
-          </a>
-        </Panel>
-
-        <Panel title="What it covers">
-          <ul className="list-inside list-disc space-y-1 text-sm text-term-text2">
-            {contents.map((c) => (
-              <li key={c}>{c}</li>
-            ))}
-          </ul>
-        </Panel>
-      </div>
-
-      <Panel title="Key figures" className="mt-3">
-        <dl className="divide-y divide-term-line text-sm">
-          {figures.map(([k, v]) => (
-            <div key={k} className="grid grid-cols-1 gap-0.5 py-2 sm:grid-cols-[12rem_1fr] sm:gap-4">
-              <dt className="text-term-text2">{k}</dt>
-              <dd className="font-mono text-term-text">{v}</dd>
+      <PageTitle
+        title="White papers"
+        network="both"
+        sub="Both are drafts, public for testnet testing. No third-party audit and no legal review have been performed."
+      />
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        {papers.map((p) => (
+          <Panel key={p.title}>
+            <div className="mb-1 flex flex-wrap items-center gap-2">
+              <h2 className="text-lg font-semibold text-term-text">{p.title}</h2>
+              <Badge tone="muted">{p.about}</Badge>
             </div>
-          ))}
-        </dl>
-      </Panel>
+            <div className="mb-3 font-mono text-xs text-term-text3">{p.date}</div>
+            <p className="text-[15px] leading-relaxed text-term-text2">{p.summary}</p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <a
+                href={p.href}
+                download={p.file}
+                className="inline-flex items-center rounded border border-term-green/50 px-4 py-2 font-mono text-sm text-term-green hover:bg-term-green/10"
+              >
+                Download PDF
+              </a>
+              <a
+                href={p.href}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center rounded border border-term-lineStrong px-4 py-2 font-mono text-sm text-term-text2 hover:text-term-text"
+              >
+                Open in browser
+              </a>
+            </div>
+          </Panel>
+        ))}
+      </div>
     </>
   );
 }

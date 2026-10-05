@@ -41,7 +41,7 @@ function sections(net: NetSlug): Section[] {
       items: [
         { label: "How it works", Icon: BookIcon, href: "/learn/how-it-works" },
         { label: "How to test", Icon: HelpIcon, href: "/learn/how-to-test" },
-        { label: "White paper", Icon: FileIcon, href: "/learn/white-paper" },
+        { label: "White papers", Icon: FileIcon, href: "/learn/white-paper" },
       ],
     },
   ];
