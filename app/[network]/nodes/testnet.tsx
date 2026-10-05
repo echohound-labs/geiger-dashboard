@@ -20,7 +20,7 @@ function statusBadge(n: NodeView): { tone: Tone; text: string } {
   return { tone: "bad", text: "offline" };
 }
 
-function Card({ n, required }: { n: NodeView; required: bigint }) {
+function Card({ n, required, window }: { n: NodeView; required: bigint; window: number }) {
   const s = statusBadge(n);
   const hot = n.payout === n.operator;
   const sym = NETWORK.symbol;
@@ -39,20 +39,7 @@ function Card({ n, required }: { n: NodeView; required: bigint }) {
       }
       left={[
         [
-          "On time",
-          n.onTime ? (
-            <span key="ot">
-              {pct(n.onTime.hits, n.onTime.lines)}{" "}
-              <span className="text-term-text3">
-                ({int(n.onTime.hits)} / {int(n.onTime.lines)} lines)
-              </span>
-            </span>
-          ) : (
-            "— (not earning yet)"
-          ),
-        ],
-        [
-          `Last ${n.recent.length || "—"} lines`,
+          `Last ${n.recent.length || 48} lines`,
           n.recent.length ? (
             <span key="sp" className="inline-flex flex-wrap items-center justify-end gap-2">
               <LineStrip lines={n.recent} />
@@ -65,6 +52,22 @@ function Card({ n, required }: { n: NodeView; required: bigint }) {
           ),
         ],
         ["Current streak", n.onTime ? `${int(n.streak)} line${n.streak === 1 ? "" : "s"} on time` : "—"],
+        [
+          <span key="otl">
+            On time, last {int(window)} lines
+            <span className="block text-xs text-term-text3">still includes any recent outage</span>
+          </span>,
+          n.onTime ? (
+            <span key="ot">
+              {pct(n.onTime.hits, n.onTime.lines)}{" "}
+              <span className="text-term-text3">
+                ({int(n.onTime.hits)} / {int(n.onTime.lines)})
+              </span>
+            </span>
+          ) : (
+            "— (not earning yet)"
+          ),
+        ],
         [
           "Stake / required",
           n.stakeLamports === null ? (
@@ -99,7 +102,7 @@ function Card({ n, required }: { n: NodeView; required: bigint }) {
       ]}
       footer={hot ? <p className="font-mono text-xs text-term-amber">⚠ {HOT_PAYOUT_NOTE}</p> : undefined}
       details={[
-        ["On-chain name", `none (GERO ${NETWORK.geroVersion} stores no node names)`],
+        ["On-chain name", "none (not stored on testnet)"],
         ["Node slot", String(n.index)],
         ["Node key", <Addr key="k" value={n.operator} />],
         ["Claim account", <Addr key="c" value={n.claimAddress} />],
@@ -126,7 +129,7 @@ export async function TestnetNodes() {
       <PageTitle
         network="testnet"
         title="Nodes"
-        sub={`Every node in GERO's table. On-time rate over the last ${int(v.window)} final lines (≈ ${linesToDuration(v.window)}).`}
+        sub={`Every node in GERO's table. The last 48 lines and the current streak show how a node is doing now; the ${int(v.window)}-line on-time rate (≈ ${linesToDuration(v.window)}) still counts any recent outage until it rolls out of the window.`}
         right={<AutoRefresh renderedAt={Date.now()} />}
       />
       {v.lineLogDefect && (
@@ -137,7 +140,7 @@ export async function TestnetNodes() {
       <div className="grid grid-cols-1 gap-3">
         {nodes.length === 0 && <Panel>No nodes in the table.</Panel>}
         {nodes.map((n) => (
-          <Card key={n.index} n={n} required={v.requiredStakeLamports} />
+          <Card key={n.index} n={n} required={v.requiredStakeLamports} window={v.window} />
         ))}
         <BecomeOperator stake={xnt(v.requiredStakeLamports)} slash={xnt(v.slashLamports)} />
       </div>
