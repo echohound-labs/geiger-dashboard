@@ -19,7 +19,7 @@ const papers = [
   {
     title: "ENTROPY White Paper v0.1",
     about: "the token",
-    date: "draft, October 4, 2026",
+    date: "draft, October 4, 2026 · rebuilt October 5, 2026",
     href: WHITE_PAPER_URL,
     file: "ENTROPY_WHITEPAPER_v0.1.pdf",
     summary:
