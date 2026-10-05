@@ -115,6 +115,9 @@ export function BecomeOperator({ stake, slash }: { stake?: string; slash?: strin
           </li>
         ))}
       </ul>
+      <p className="mt-4 border-t border-term-line pt-3 text-sm text-term-text2">
+        <span className="font-mono text-term-green">Contact.</span> Contact coming soon.
+      </p>
     </Panel>
   );
 }
