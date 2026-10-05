@@ -142,3 +142,15 @@ export function Table({ head, rows, empty }: { head: ReactNode[]; rows: ReactNod
     </div>
   );
 }
+
+export const HOT_PAYOUT_NOTE =
+  "Payout address = operator (hot node) key. Fine on testnet; on mainnet the payout must be a cold wallet that can connect to a browser, distinct from the node key.";
+
+/** ⚠ when a node pays its rewards to its own operator (hot node) key. */
+export function HotPayoutBadge() {
+  return (
+    <span title={HOT_PAYOUT_NOTE}>
+      <Badge tone="warn">⚠ payout = node key</Badge>
+    </span>
+  );
+}

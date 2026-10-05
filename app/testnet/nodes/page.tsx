@@ -1,5 +1,5 @@
 import { AutoRefresh } from "@/components/auto-refresh";
-import { Addr, Badge, ErrorPanel, KV, PageTitle, Panel, type Tone } from "@/components/ui";
+import { Addr, Badge, ErrorPanel, HOT_PAYOUT_NOTE, HotPayoutBadge, KV, PageTitle, Panel, type Tone } from "@/components/ui";
 import { PAYOUT_DELAY_SLOTS, getNodesView, type NodeStatus, type NodesView } from "@/lib/chain";
 import { NETWORK } from "@/lib/config";
 import { amount, int, linesToDuration, pct, slotsToDuration, xnt } from "@/lib/format";
@@ -44,7 +44,9 @@ export default async function NodesPage() {
                 <span className="font-mono text-sm text-term-text2">slot {n.index}</span>
                 <Badge tone={statusTone[n.status]}>{n.status}</Badge>
                 {n.statusNote && <span className="font-mono text-xs text-term-text3">{n.statusNote}</span>}
+                {n.payout === n.operator && <HotPayoutBadge />}
               </div>
+              {n.payout === n.operator && <p className="mb-3 font-mono text-xs text-term-amber">⚠ {HOT_PAYOUT_NOTE}</p>}
               <div className="grid grid-cols-1 gap-x-8 lg:grid-cols-2">
                 <KV
                   rows={[

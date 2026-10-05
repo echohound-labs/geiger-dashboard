@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "verify": "tsx scripts/verify.ts"
+    "verify": "tsx scripts/verify.ts",
+    "simulate-claim": "tsx scripts/simulate-claim.ts"
   },
   "dependencies": {
     "@solana/wallet-adapter-backpack": "^0.1.14",

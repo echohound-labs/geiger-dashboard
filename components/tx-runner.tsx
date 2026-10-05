@@ -4,7 +4,7 @@ import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import type { PublicKey, TransactionInstruction } from "@solana/web3.js";
 import { useState, type ReactNode } from "react";
 import { Badge } from "./ui";
-import { NETWORK, explorerTx, writesAllowed } from "@/lib/config";
+import { NETWORK, writesAllowed } from "@/lib/config";
 import { buildTx, signAndSend, simulate, type BuiltTx, type SimResult } from "@/lib/tx";
 
 export interface Prepared<C> {
@@ -48,7 +48,8 @@ export function TxRunner<C>({
   prepare: () => Promise<Prepared<C>>;
   /** What the simulation says will happen, read from the watched accounts. */
   describe: (sim: SimResult, built: BuiltTx, ctx: C) => ReactNode;
-  onDone: () => void;
+  /** Called with the signature once confirmed; the caller shows it (with an explorer link) and re-reads its numbers. */
+  onDone: (signature: string) => void;
 }) {
   const { connection } = useConnection();
   const { publicKey, signTransaction } = useWallet();
@@ -86,7 +87,7 @@ export function TxRunner<C>({
         return signed;
       });
       setStep({ kind: "done", signature });
-      onDone();
+      onDone(signature);
     } catch (e) {
       // SendTransactionError (preflight refusal) carries the program logs.
       const logs = (e as { logs?: unknown }).logs;
@@ -141,20 +142,6 @@ export function TxRunner<C>({
           {step.kind === "simulated" && shown.sim.ok && (
             <p className="text-term-text3">Nothing has been signed or sent yet. The blockhash expires in about a minute; simulate again if the send is refused.</p>
           )}
-        </div>
-      )}
-
-      {step.kind === "done" && (
-        <div className="mt-3 space-y-1 font-mono text-xs">
-          <div className="flex items-center gap-2">
-            <Badge tone="good">confirmed</Badge>
-            <span className="text-term-text2">{name}</span>
-          </div>
-          <div className="break-all">
-            <a className="text-term-green underline" href={explorerTx(step.signature)} target="_blank" rel="noreferrer">
-              {step.signature}
-            </a>
-          </div>
         </div>
       )}
 

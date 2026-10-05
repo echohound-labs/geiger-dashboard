@@ -119,8 +119,9 @@ export default function AboutPage() {
         <Panel title="This hub">
           <p>
             Every figure is read from chain accounts on each page load: {MAINNET_ORACLE.label} for the Oracle page,{" "}
-            {TESTNET.label} for the Testnet pages. The only transaction the hub can build is open_claim on {TESTNET.label},
-            simulated and shown before the wallet signs. Claiming from the browser is planned for a later stage.
+            {TESTNET.label} for the Testnet pages. On {TESTNET.label} the My node page can open a claim account and claim{" "}
+            {TESTNET.symbol}; each transaction is simulated and shown before the wallet signs. Transactions stay disabled on
+            mainnet before launch.
           </p>
         </Panel>
       </div>

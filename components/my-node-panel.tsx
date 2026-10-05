@@ -4,10 +4,10 @@ import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import { useCallback, useEffect, useState } from "react";
 import { TxRunner } from "./tx-runner";
-import { Addr, Badge, ErrorPanel, KV, Panel } from "./ui";
+import { Addr, Badge, ErrorPanel, HOT_PAYOUT_NOTE, HotPayoutBadge, KV, Panel } from "./ui";
 import { WalletButton } from "./wallet-button";
 import { getMinterState, getMyNodeView, type MyNodeView } from "@/lib/chain";
-import { NETWORK, explorerAddress } from "@/lib/config";
+import { NETWORK, explorerAddress, explorerTx } from "@/lib/config";
 import { amount, xnt } from "@/lib/format";
 import {
   CLAIMABLE_LEN,
@@ -30,6 +30,10 @@ export function MyNodePanel() {
   const [loading, setLoading] = useState(false);
   const [reload, setReload] = useState(0);
   const [claimRent, setClaimRent] = useState<number | null>(null);
+  // Kept here, not in TxRunner: the refresh after a confirm can unmount the runner (open_claim disappears once the account exists).
+  const [lastTx, setLastTx] = useState<{ name: string; signature: string } | null>(null);
+
+  useEffect(() => setLastTx(null), [wallet]);
 
   useEffect(() => {
     if (!wallet) {
@@ -55,7 +59,10 @@ export function MyNodePanel() {
       .catch(() => setClaimRent(null));
   }, [connection]);
 
-  const refresh = useCallback(() => setReload((n) => n + 1), []);
+  const done = useCallback((name: string, signature: string) => {
+    setLastTx({ name, signature });
+    setReload((n) => n + 1);
+  }, []);
 
   if (!wallet || !publicKey) {
     return (
@@ -71,6 +78,9 @@ export function MyNodePanel() {
 
   const c = view?.claim ?? null;
   const notPayout = view !== null && view.payoutSlots.length === 0;
+  // Slots that pay this wallet while this wallet is also their operator (hot node) key.
+  const hotSlots = view ? view.nodes.filter((n) => n.payout === wallet && n.operator === wallet) : [];
+  const operatorOnly = view ? view.operatorSlots.filter((i) => !view.payoutSlots.includes(i)) : [];
   return (
     <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
       <Panel title="Acting for" className="lg:col-span-2">
@@ -79,6 +89,21 @@ export function MyNodePanel() {
           payer, the payee and the only signer of every transaction on this page. Claims go to this wallet&apos;s own claim
           account and its own token account; to act for another address, connect that wallet.
         </p>
+        {hotSlots.length > 0 && (
+          <div className="mt-3 space-y-1 rounded-md border border-term-amber/40 p-3 font-mono text-sm text-term-amber">
+            <div className="flex flex-wrap items-center gap-2">
+              <HotPayoutBadge />
+              <span>node slot {hotSlots.map((n) => n.index).join(", ")}</span>
+            </div>
+            <div>⚠ {HOT_PAYOUT_NOTE}</div>
+          </div>
+        )}
+        {operatorOnly.length > 0 && (
+          <div className="mt-3 rounded-md border border-term-amber/40 p-3 font-mono text-sm text-term-amber">
+            ⚠ This wallet is the operator (node) key of slot {operatorOnly.join(", ")}, which pays a different address. Rewards
+            accrue to that payout address, not to this key.
+          </div>
+        )}
         {notPayout && (
           <div className="mt-3 rounded-md border border-term-amber/40 p-3 font-mono text-sm text-term-amber">
             ⚠ This wallet is not the payout address of any node. Nothing accrues to its claim account, so claim has nothing to
@@ -111,7 +136,7 @@ export function MyNodePanel() {
             [`Total claimed (${NETWORK.symbol})`, c ? amount(c.totalClaimed) : "—"],
             [
               "Payout address of node slot",
-              view ? (view.payoutSlots.length ? view.payoutSlots.join(", ") : "none in the line record") : "…",
+              view ? (view.payoutSlots.length ? view.payoutSlots.join(", ") : "none") : "…",
             ],
           ]}
         />
@@ -121,6 +146,17 @@ export function MyNodePanel() {
         note="Each action is simulated first; the result is shown before the wallet is asked to sign, and nothing is sent unless the simulation succeeded."
       >
         <div className="space-y-3">
+          {lastTx && (
+            <div className="space-y-1 rounded border border-term-green/40 p-3 font-mono text-xs">
+              <div className="flex items-center gap-2">
+                <Badge tone="good">confirmed</Badge>
+                <span className="text-term-text2">{lastTx.name}; the figures on this page were re-read after it</span>
+              </div>
+              <a className="block break-all text-term-green underline" href={explorerTx(lastTx.signature)} target="_blank" rel="noreferrer">
+                {lastTx.signature}
+              </a>
+            </div>
+          )}
           {view && !c && (
             <div className="space-y-2">
               {notPayout && (
@@ -153,12 +189,12 @@ export function MyNodePanel() {
                         {claimAcct.after?.data.length ?? "?"} bytes
                       </li>
                       <li>rent locked in it: {claimAcct.after ? xnt(BigInt(claimAcct.after.lamports)) : "?"}</li>
-                      <li>wallet balance change in the simulation: {spent === null ? "?" : `−${xnt(BigInt(spent))}`}</li>
+                      <li>wallet balance change in the simulation (fee included): {spent === null ? "?" : `−${xnt(BigInt(spent))}`}</li>
                       <li>network fee: {built.feeLamports === null ? "unknown" : xnt(BigInt(built.feeLamports))}</li>
                     </ul>
                   );
                 }}
-                onDone={refresh}
+                onDone={(signature) => done("open_claim", signature)}
               />
             </div>
           )}
@@ -218,12 +254,12 @@ export function MyNodePanel() {
                         destination {ctx.ataExisted ? "exists" : `created in this transaction (rent ${ataAcct.after ? xnt(BigInt(ataAcct.after.lamports)) : "?"})`}
                       </li>
                       <li>claimable after: {accruedAfter === null ? "?" : amount(accruedAfter)}</li>
-                      <li>wallet balance change in the simulation: {spent === null ? "?" : `−${xnt(BigInt(spent))}`}</li>
+                      <li>wallet balance change in the simulation (fee included): {spent === null ? "?" : `−${xnt(BigInt(spent))}`}</li>
                       <li>network fee: {built.feeLamports === null ? "unknown" : xnt(BigInt(built.feeLamports))}</li>
                     </ul>
                   );
                 }}
-                onDone={refresh}
+                onDone={(signature) => done("claim", signature)}
               />
             </div>
           )}

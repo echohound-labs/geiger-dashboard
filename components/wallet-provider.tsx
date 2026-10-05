@@ -13,9 +13,9 @@ if (typeof globalThis !== "undefined" && !(globalThis as { Buffer?: unknown }).B
   (globalThis as { Buffer?: unknown }).Buffer = Buffer;
 }
 
-// Same setup as houndtag-site. Stage 1 only connects and reads the public key;
-// all reads go through lib/chain.ts, nothing is signed. Stage 2 adds the
-// open_claim / claim transactions through this provider's connection.
+// Same setup as houndtag-site. Reads go through lib/chain.ts; the My node
+// page's open_claim / claim transactions go through lib/tx.ts with this
+// provider's connection and the wallet's signTransaction.
 export function WalletContextProvider({ children }: { children: ReactNode }) {
   // An unconfigured network gets a local placeholder, never another cluster's RPC.
   const endpoint = NETWORK.rpcUrl || "http://127.0.0.1:8899";
