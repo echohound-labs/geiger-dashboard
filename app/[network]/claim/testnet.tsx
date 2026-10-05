@@ -1,3 +1,4 @@
+import { ClaimLookup } from "@/components/claim-lookup";
 import { MyNodePanel } from "@/components/my-node-panel";
 import { PageTitle } from "@/components/ui";
 import { WalletButton } from "@/components/wallet-button";
@@ -12,6 +13,9 @@ export function TestnetClaim() {
         right={<WalletButton />}
       />
       <MyNodePanel />
+      <div className="mt-3">
+        <ClaimLookup />
+      </div>
     </>
   );
 }
