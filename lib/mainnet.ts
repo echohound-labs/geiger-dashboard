@@ -3,7 +3,7 @@
  *
  * Ported from the v8.1 dashboard (index.html before the hub replaced it): the
  * same accounts, discriminators, offsets and instruction labels. lib/chain.ts
- * decodes the v9.1b layouts on X1 testnet and is not used here.
+ * decodes the v9.1x layouts on X1 testnet and is not used here.
  *
  * JSON-RPC getters only (getSlot, getAccountInfo, getProgramAccounts,
  * getSignaturesForAddress, getTransaction). Server-side; the browser never

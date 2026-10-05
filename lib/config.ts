@@ -3,9 +3,9 @@
  *
  * The hub shows two networks side by side:
  *   X1 mainnet  GERO v8.1 (oracle only). MAINNET_ORACLE, read by lib/mainnet.ts.
- *   X1 testnet  GERO v9.1b and the ENTROPY minter (tENTROPY). NETWORK, read by
+ *   X1 testnet  GERO v9.1c and the ENTROPY minter (tENTROPY). NETWORK, read by
  *               lib/chain.ts and lib/tx.ts.
- * ENTROPY is not launched on mainnet, so the v9.1b + ENTROPY view reads X1
+ * ENTROPY is not launched on mainnet, so the testnet GERO + ENTROPY view reads X1
  * testnet only; there is no mainnet entry for it.
  *
  * NEXT_PUBLIC_X1_TESTNET_RPC_URL overrides the testnet RPC endpoint (also used
@@ -25,6 +25,8 @@ export interface NetworkConfig {
   rpcUrl: string;
   /** GERO oracle program (owns OracleState, NodeStream, LineLog, requests). */
   geroProgram: string;
+  /** GERO version deployed at geroProgram, shown in the UI. The only place it is set. */
+  geroVersion: string;
   /** entropy-minter program (MinterState, Claimable, mint authority PDA). */
   minterProgram: string;
   /** ENTROPY Token-2022 mint. Cross-checked against MinterState.mint. */
@@ -48,6 +50,7 @@ export const TESTNET: NetworkConfig = {
   label: "X1 Testnet",
   rpcUrl: process.env.NEXT_PUBLIC_X1_TESTNET_RPC_URL || "https://rpc.testnet.x1.xyz",
   geroProgram: "2dQf9uaCzXewrDNLttmtzQmc3SmqfAHz3qahKQjtGQyY",
+  geroVersion: "v9.1c",
   minterProgram: "J79sxwNizAqFpTaXR9C5EAokhYDKW4JkYL4txAq5qAwS",
   entropyMint: "85xvCxwKSns83kbwjqykAuSgVyAd3ZDdYfgVEfTCGtNm",
   ecoVaultProgram: "F7pxRZZcBwHoB19SLRfSe5vSsCPMNDqimu2YMo8ngEHv",
@@ -57,7 +60,7 @@ export const TESTNET: NetworkConfig = {
   explorerQuery: "?cluster=testnet",
 };
 
-/** The v9.1b + ENTROPY view. Always X1 testnet. */
+/** The testnet GERO + ENTROPY view. Always X1 testnet. */
 export const NETWORK: NetworkConfig = TESTNET;
 
 /** GERO v8.1 on X1 mainnet: the live oracle. Addresses from the v8.1 dashboard. */

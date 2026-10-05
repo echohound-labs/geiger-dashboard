@@ -32,7 +32,7 @@ const INTEGRATIONS: Integration[] = [
 
 const programs = [
   { net: "X1 Mainnet", version: `GERO ${MAINNET_ORACLE.version}`, id: MAINNET_ORACLE.program, href: mainnetAddress(MAINNET_ORACLE.program) },
-  { net: "X1 Testnet", version: "GERO v9.1 (next version, in testing)", id: TESTNET.geroProgram, href: explorerAddress(TESTNET.geroProgram) },
+  { net: "X1 Testnet", version: `GERO ${TESTNET.geroVersion} (next version, in testing)`, id: TESTNET.geroProgram, href: explorerAddress(TESTNET.geroProgram) },
 ];
 
 export default function Page(p: NetParams) {

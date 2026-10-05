@@ -5,7 +5,7 @@ Dashboard for the GERO randomness oracle on X1.
 | network | what | pages |
 |---|---|---|
 | X1 mainnet | GERO v8.1, the live oracle: requests, fulfilled, nodes, pool freshness, recent transactions | `/mainnet/*` |
-| X1 testnet | GERO v9.1b and the ENTROPY minter (tENTROPY, a test token with no value) | `/testnet/*` |
+| X1 testnet | GERO v9.1c and the ENTROPY minter (tENTROPY, a test token with no value) | `/testnet/*` |
 
 Every data page lives under `/[network]` (`overview`, `oracle`, `nodes`, `activity`, `integrations`, `entropy`, `claim`),
 and the sidebar's Mainnet | Testnet switch keeps the page. ENTROPY is not launched on mainnet: `/mainnet/entropy` and
@@ -33,7 +33,7 @@ the wallet in the browser). Defaults are the public X1 RPC endpoints.
 
 | path | what |
 |---|---|
-| `lib/config.ts` | every address: `MAINNET_ORACLE` (GERO v8.1) and `TESTNET` (GERO v9.1b + minter) |
+| `lib/config.ts` | every address: `MAINNET_ORACLE` (GERO v8.1) and `TESTNET` (GERO v9.1c + minter; `TESTNET.geroVersion` is the version the UI shows) |
 | `lib/mainnet.ts` | GERO v8.1 on X1 mainnet: OracleState, EntropyPool, RandomnessRequest, EntropyNode decoders and the operator feed, ported from the v8.1 dashboard. One reader per data set (`getMainnetOracle` / `Pool` / `Requests` / `Nodes` / `Feed`); each page calls only the ones it shows |
 | `lib/chain.ts` | the X1 testnet RPC boundary: typed decoders for MinterState, Claimable, OracleState, NodeStream(+Ext), LineLog, LineBatch, RandomnessRequest, plus one view function per page. Isomorphic (the Claim page uses it from the browser) |
 | `lib/tx.ts` | the only write path (X1 testnet): `open_claim`, `claim`, ATA `CreateIdempotent` builders (layouts from `minter_init.py` and the program's Accounts structs), build → simulate → sign → send → confirm |

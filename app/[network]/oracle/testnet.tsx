@@ -34,7 +34,7 @@ export async function TestnetOracle() {
       <PageTitle
         network="testnet"
         title="Oracle status"
-        sub="GERO v9.1b, the next version, in testing on X1 testnet."
+        sub={`GERO ${NETWORK.geroVersion}, the next version, in testing on X1 testnet.`}
         right={<AutoRefresh renderedAt={Date.now()} />}
       />
       <Grid>

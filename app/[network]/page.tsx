@@ -99,7 +99,7 @@ export default async function OverviewPage(p: NetParams) {
         <p>
           <span className="font-mono text-term-green">GERO</span> is a randomness oracle on X1 whose entropy comes from
           physical radioactive decay measured by Geiger counters run by node operators. {MAINNET_ORACLE.label} runs GERO{" "}
-          {MAINNET_ORACLE.version}; {TESTNET.label} runs the next version, GERO v9.1b.
+          {MAINNET_ORACLE.version}; {TESTNET.label} runs the next version, GERO {TESTNET.geroVersion}.
         </p>
         <p>
           <span className="font-mono text-term-green">ENTROPY</span> is a mined, hard-capped utility token for GERO:

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Share_Tech_Mono, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { Footer } from "@/components/footer";
-import { SITE_NAME, SITE_TAGLINE } from "@/lib/config";
+import { SITE_NAME, SITE_TAGLINE, TESTNET } from "@/lib/config";
 import { Sidebar } from "@/components/sidebar";
 import { ThemeSync } from "@/components/theme";
 import { THEME_SCRIPT } from "@/lib/theme-script";
@@ -12,7 +12,7 @@ const grotesk = Space_Grotesk({ subsets: ["latin"], weight: ["400", "500", "600"
 
 export const metadata: Metadata = {
   title: { default: `${SITE_NAME} · ${SITE_TAGLINE}`, template: `%s · ${SITE_NAME} · ${SITE_TAGLINE}` },
-  description: "Status of the GERO randomness oracle on X1 mainnet, and of GERO v9.1b and the ENTROPY minter on X1 testnet.",
+  description: `Status of the GERO randomness oracle on X1 mainnet, and of GERO ${TESTNET.geroVersion} and the ENTROPY minter on X1 testnet.`,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

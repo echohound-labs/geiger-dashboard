@@ -5,7 +5,7 @@ export type Net = "mainnet" | "testnet" | "both";
 
 const netText: Record<Net, string> = {
   mainnet: `${MAINNET_ORACLE.label} · GERO ${MAINNET_ORACLE.version}`,
-  testnet: `${TESTNET.label} · GERO v9.1b + ${TESTNET.symbol}`,
+  testnet: `${TESTNET.label} · GERO ${TESTNET.geroVersion} + ${TESTNET.symbol}`,
   both: `${MAINNET_ORACLE.label} + ${TESTNET.label}`,
 };
 
