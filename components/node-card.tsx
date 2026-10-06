@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Badge, Details, KV, Panel, type Tone } from "./ui";
 import { int } from "@/lib/format";
+import { TELEGRAM_URL } from "@/lib/config";
 
 /** One node: name and slot, a badge row, then two columns of figures. Legacy nodes are greyed. */
 export function NodeCard({
@@ -116,7 +117,10 @@ export function BecomeOperator({ stake, slash }: { stake?: string; slash?: strin
         ))}
       </ul>
       <p className="mt-4 border-t border-term-line pt-3 text-sm text-term-text2">
-        <span className="font-mono text-term-green">Contact.</span> Contact coming soon.
+        <span className="font-mono text-term-green">Contact.</span> To apply, join the GERO Network Telegram:{" "}
+        <a className="underline decoration-term-line hover:text-term-text" href={TELEGRAM_URL} target="_blank" rel="noreferrer">
+          https://t.me/geronetwork
+        </a>
       </p>
     </Panel>
   );

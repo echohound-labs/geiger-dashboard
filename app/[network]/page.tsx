@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { Badge, Dot, ErrorPanel, KV, PageTitle, Panel, type Tone } from "@/components/ui";
 import { getTestnetOverview, type TestnetOverview } from "@/lib/chain";
-import { MAINNET_ORACLE, TESTNET, WHITE_PAPER_URL, explorerAddress, explorerTx, mainnetTx } from "@/lib/config";
+import { MAINNET_ORACLE, TELEGRAM_URL, TESTNET, WHITE_PAPER_URL, explorerAddress, explorerTx, mainnetTx } from "@/lib/config";
 import { amount, amountShort, int, linesToDuration, short, timeAgo, utc } from "@/lib/format";
 import { freshnessOf, getMainnetFeed, getMainnetNodes, getMainnetOracle, type Freshness, type MainnetTx } from "@/lib/mainnet";
 import { netMetadata, netParam, type NetParams, type NetSlug } from "@/lib/networks";
@@ -208,6 +208,9 @@ export default async function OverviewPage(p: NetParams) {
         <Link href="/testnet/claim" className={btnPlain}>
           Claim {sym} (testnet)
         </Link>
+        <a href={TELEGRAM_URL} target="_blank" rel="noreferrer" className={btnPlain}>
+          Telegram
+        </a>
       </div>
     </>
   );

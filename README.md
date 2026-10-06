@@ -1,6 +1,6 @@
 # GERO · physical randomness on X1
 
-Dashboard for the GERO randomness oracle on X1.
+Dashboard for the GERO randomness oracle on X1. Live at https://gero.network. Community: https://t.me/geronetwork.
 
 | network | what | pages |
 |---|---|---|
@@ -17,7 +17,11 @@ and the sidebar's Mainnet | Testnet switch keeps the page. ENTROPY is not launch
 Light and dark themes come from CSS variables in `app/globals.css`; the default follows the device setting and a choice
 is kept in localStorage.
 
-Next.js 14 (App Router) + TypeScript + Tailwind, deployed on Vercel (`vercel.json` selects the Next.js preset).
+Next.js 14 (App Router) + TypeScript + Tailwind, deployed on Vercel (`vercel.json` selects the Next.js preset) at
+https://gero.network (`metadataBase` and the canonical URLs in `app/layout.tsx`).
+
+Brand assets live in `public/` and are referenced from `app/layout.tsx`: `favicon.ico` (16/32/48 px), `favicon-16x16.png`,
+`favicon-32x32.png`, `apple-touch-icon.png` (180×180) and `og.png` (1200×630, the Open Graph / Twitter card image).
 
 ```
 npm install

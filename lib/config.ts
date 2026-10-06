@@ -16,6 +16,10 @@
 /** Site name and tagline: sidebar brand and page titles. */
 export const SITE_NAME = "GERO";
 export const SITE_TAGLINE = "physical randomness on X1";
+/** Public origin of the site: metadataBase, canonical URLs, Open Graph. */
+export const SITE_URL = "https://gero.network";
+/** GERO Network Telegram: footer, Overview buttons, node-operator contact. */
+export const TELEGRAM_URL = "https://t.me/geronetwork";
 
 export type NetworkName = "testnet" | "mainnet";
 

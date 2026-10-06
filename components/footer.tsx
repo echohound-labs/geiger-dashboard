@@ -1,5 +1,5 @@
 import { Addr } from "./ui";
-import { MAINNET_ORACLE, TESTNET, explorerAddress, mainnetAddress } from "@/lib/config";
+import { MAINNET_ORACLE, TELEGRAM_URL, TESTNET, explorerAddress, mainnetAddress } from "@/lib/config";
 
 export const REPO_URL = "https://github.com/echohound-labs/geiger-dashboard";
 
@@ -47,9 +47,14 @@ export function Footer() {
             </div>
           ))}
         </div>
-        <a className="inline-block underline decoration-term-line hover:text-term-text" href={REPO_URL} target="_blank" rel="noreferrer">
-          GitHub: echohound-labs/geiger-dashboard
-        </a>
+        <div className="flex flex-wrap gap-x-4 gap-y-1">
+          <a className="underline decoration-term-line hover:text-term-text" href={REPO_URL} target="_blank" rel="noreferrer">
+            GitHub: echohound-labs/geiger-dashboard
+          </a>
+          <a className="underline decoration-term-line hover:text-term-text" href={TELEGRAM_URL} target="_blank" rel="noreferrer">
+            Telegram
+          </a>
+        </div>
       </div>
     </footer>
   );
