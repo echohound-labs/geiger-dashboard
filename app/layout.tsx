@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Share_Tech_Mono, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { Footer } from "@/components/footer";
-import { SITE_NAME, SITE_TAGLINE, SITE_URL, TESTNET } from "@/lib/config";
+import { MAINNET, SITE_NAME, SITE_TAGLINE, SITE_URL, TESTNET } from "@/lib/config";
 import { Sidebar } from "@/components/sidebar";
 import { ThemeSync } from "@/components/theme";
 import { THEME_SCRIPT } from "@/lib/theme-script";
@@ -10,7 +10,7 @@ import { THEME_SCRIPT } from "@/lib/theme-script";
 const term = Share_Tech_Mono({ subsets: ["latin"], weight: "400", variable: "--font-term", display: "swap" });
 const grotesk = Space_Grotesk({ subsets: ["latin"], weight: ["400", "500", "600"], variable: "--font-grotesk", display: "swap" });
 
-const DESCRIPTION = `Status of the GERO randomness oracle on X1 mainnet, and of GERO ${TESTNET.geroVersion} and the ENTROPY minter on X1 testnet.`;
+const DESCRIPTION = `Status of the GERO ${MAINNET.geroVersion} randomness oracle on X1 mainnet and testnet, and of the ENTROPY minter (${TESTNET.symbol}) on X1 testnet.`;
 
 // Favicon and Open Graph image are static files in public/ (see README, "Brand assets").
 export const metadata: Metadata = {

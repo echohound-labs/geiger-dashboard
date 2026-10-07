@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { MAINNET_ORACLE, TESTNET } from "@/lib/config";
+import { MAINNET, TESTNET } from "@/lib/config";
 
 export type Net = "mainnet" | "testnet" | "both";
 
 const netText: Record<Net, string> = {
-  mainnet: `${MAINNET_ORACLE.label} · GERO ${MAINNET_ORACLE.version}`,
+  mainnet: `${MAINNET.label} · GERO ${MAINNET.geroVersion}`,
   testnet: `${TESTNET.label} · GERO ${TESTNET.geroVersion} + ${TESTNET.symbol}`,
-  both: `${MAINNET_ORACLE.label} + ${TESTNET.label}`,
+  both: `${MAINNET.label} + ${TESTNET.label}`,
 };
 
 const netTone: Record<Net, string> = {

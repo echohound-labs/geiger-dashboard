@@ -1,6 +1,7 @@
 import { Addr, Badge, PageTitle, Panel } from "@/components/ui";
-import { MAINNET_ORACLE, TESTNET, explorerAddress, mainnetAddress } from "@/lib/config";
-import { CANCEL_WINDOW_SLOTS } from "@/lib/mainnet";
+import { CANCEL_WINDOW_SLOTS, TYPICAL_FULFIL_SLOTS } from "@/lib/chain";
+import { MAINNET, TESTNET, explorerAddress } from "@/lib/config";
+import { slotsToDuration } from "@/lib/format";
 import { netMetadata, netParam, type NetParams } from "@/lib/networks";
 
 export const generateMetadata = netMetadata("Integrations");
@@ -31,8 +32,8 @@ const INTEGRATIONS: Integration[] = [
 ];
 
 const programs = [
-  { net: "X1 Mainnet", version: `GERO ${MAINNET_ORACLE.version}`, id: MAINNET_ORACLE.program, href: mainnetAddress(MAINNET_ORACLE.program) },
-  { net: "X1 Testnet", version: `GERO ${TESTNET.geroVersion} (next version, in testing)`, id: TESTNET.geroProgram, href: explorerAddress(TESTNET.geroProgram) },
+  { net: MAINNET.label, version: `GERO ${MAINNET.geroVersion}: oracle and request fee`, id: MAINNET.geroProgram, href: explorerAddress(MAINNET.geroProgram, MAINNET) },
+  { net: TESTNET.label, version: `GERO ${TESTNET.geroVersion}: oracle, request fee, line record and ${TESTNET.symbol}`, id: TESTNET.geroProgram, href: explorerAddress(TESTNET.geroProgram, TESTNET) },
 ];
 
 export default function Page(p: NetParams) {
@@ -69,18 +70,23 @@ export default function Page(p: NetParams) {
         <div className="space-y-3 text-[15px] leading-relaxed text-term-text">
           <p>
             Your program asks GERO for a random value, waits for it, then uses it. Randomness comes from radioactive decay
-            measured by the Geiger counters of GERO&apos;s node operators, and every result is verified on-chain.
+            measured by the Geiger counters of GERO&apos;s node operators, and every result comes with a VDF proof that is
+            checked on-chain before the request is fulfilled.
           </p>
           <ol className="list-inside list-decimal space-y-2 text-term-text2">
             <li>
               <span className="text-term-text">Request.</span> Your program calls GERO&apos;s{" "}
-              <span className="font-mono text-term-text">request_randomness</span> with a seed of its own. This creates a
-              request account that belongs to your request.
+              <span className="font-mono text-term-text">request_randomness</span> with a seed of its own and pays the
+              request fee in XNT (the current fee is on Oracle status). This creates a request account bound to the next
+              grid line.
             </li>
             <li>
-              <span className="text-term-text">Fulfil.</span> GERO fulfils the request a few slots later with a result
-              built from the nodes&apos; entropy. A request that is not fulfilled within {CANCEL_WINDOW_SLOTS} slots can no
-              longer be fulfilled; it can only be cancelled.
+              <span className="text-term-text">Fulfil.</span> GERO fulfils the request, typically {TYPICAL_FULFIL_SLOTS.min}–
+              {TYPICAL_FULFIL_SLOTS.max} slots (≈ {slotsToDuration(TYPICAL_FULFIL_SLOTS.max)}) later, with a result built from the
+              nodes&apos; entropy and a VDF proof checked on chain. There is no fulfil deadline: a late fulfil is allowed. A
+              request can be cancelled for a refund only after {CANCEL_WINDOW_SLOTS} slots, and only once it demonstrably
+              cannot be served any more (its line&apos;s batch never opened, is dead with no rollover, or does not cover its
+              nodes).
             </li>
             <li>
               <span className="text-term-text">Use.</span> Your program reads the result from the request account, for
@@ -88,8 +94,8 @@ export default function Page(p: NetParams) {
             </li>
           </ol>
           <p className="text-term-text2">
-            Build and test on X1 testnet first; mainnet runs the current version. The two versions differ, so check the
-            account layout of the one you target.
+            Build and test on X1 testnet first. Both networks run GERO {MAINNET.geroVersion} with the same account layouts;
+            only the request fee differs (see Oracle status on each network).
           </p>
         </div>
         <div className="mt-4 space-y-2">

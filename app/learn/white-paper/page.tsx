@@ -14,7 +14,7 @@ const papers = [
     href: GERO_WHITE_PAPER_URL,
     file: "GERO_WHITEPAPER_v0.1.pdf",
     summary:
-      "How GERO turns decay measured by a Geiger counter into on-chain randomness: nodes commit to hidden seeds before any request exists, the seeds are combined with the hash of a future slot and passed through a verifiable delay function, whose proof is checked on-chain from v9.1c. It covers the two live versions (v8.1 on mainnet, v9.1c on testnet with the line record and the request fee), what nodes stake and when they are slashed, and the security limits stated plainly: one operator and one node today, slashing that does not yet deter, a trusted setup for the RSA modulus, and upgrade keys that can change every rule.",
+      "How GERO turns decay measured by a Geiger counter into on-chain randomness: nodes commit to hidden seeds before any request exists, the seeds are combined with the hash of a future slot and passed through a verifiable delay function, whose proof is checked on-chain from v9.1c. Both networks run v9.1c: mainnet has the oracle and the request fee, testnet additionally has the line record and tENTROPY. It covers what nodes stake and when they are slashed, and the security limits stated plainly: one operator and one node today, slashing that does not yet deter, a trusted setup for the RSA modulus, and upgrade keys that can change every rule.",
   },
   {
     title: "ENTROPY White Paper v0.1",
@@ -33,7 +33,7 @@ export default function WhitePaperPage() {
       <PageTitle
         title="White papers"
         network="both"
-        sub="Both are drafts, public for testnet testing. No third-party audit and no legal review have been performed."
+        sub="Both are drafts, public for testnet testing. Security review so far: Claude Code audit passes only; no legal review."
       />
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         {papers.map((p) => (

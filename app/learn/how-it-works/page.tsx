@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { EntropyBanner } from "@/components/network";
 import { PageTitle, Panel, Table } from "@/components/ui";
-import { GERO_WHITE_PAPER_URL, MAINNET_ORACLE, TESTNET } from "@/lib/config";
+import { GERO_WHITE_PAPER_URL, MAINNET, TESTNET } from "@/lib/config";
 
 export const metadata = { title: "How it works" };
 
@@ -46,8 +46,9 @@ export default function HowItWorksPage() {
           <Panel title="The oracle">
             <P>
               GERO is a randomness oracle on X1 whose entropy comes from physical radioactive decay measured by Geiger
-              counters run by independent node operators. Every 8 slots it produces one <em>line</em>: one random result,
-              verified on-chain, that consumers such as Forge Launch use for NFT mints.
+              counters run by node operators; today that is a single operator with one node. Every 8 slots it produces one{" "}
+              <em>line</em>: one random result, whose VDF proof is checked on-chain, that consumers such as Forge Launch use
+              for NFT mints.
             </P>
             <P>
               The{" "}
@@ -72,10 +73,10 @@ export default function HowItWorksPage() {
           </Panel>
           <Panel title="Two networks">
             <P>
-              <span className="font-mono text-term-green">{MAINNET_ORACLE.label}</span> runs GERO {MAINNET_ORACLE.version},
-              the live oracle. <span className="font-mono text-term-amber">{TESTNET.label}</span> runs the next version,
-              with the line record, together with the ENTROPY minter and its test token {TESTNET.symbol}, which has no
-              value.
+              Both networks run GERO {MAINNET.geroVersion}.{" "}
+              <span className="font-mono text-term-green">{MAINNET.label}</span> has the oracle and the request fee.{" "}
+              <span className="font-mono text-term-amber">{TESTNET.label}</span> additionally has the line record, the
+              ENTROPY minter and its test token {TESTNET.symbol}, which has no value.
             </P>
           </Panel>
         </Section>
@@ -111,9 +112,11 @@ export default function HowItWorksPage() {
           </Panel>
           <Panel title="Settling and claiming">
             <P>
-              A line is paid once it is 64 lines old and can no longer change. Anyone can run the settlement, which credits
-              each payee&apos;s claimable balance. Each payee opens its own claim account once and can then claim at any
-              time; tokens are minted only to that payee&apos;s own token account. On testnet this happens on the{" "}
+              A line is paid once it is 64 lines old and can no longer change. Every GERO node&apos;s daemon sends the
+              settlement after its own reveals, about every 32 lines (on testnet since October 5, 2026); anyone can also
+              send it. Settlement credits each payee&apos;s claimable balance. Each payee opens its own claim account once
+              and can then claim at any time; tokens are minted only to that payee&apos;s own token account. On testnet
+              this happens on the{" "}
               <Link className={link} href="/testnet/claim">
                 Claim
               </Link>{" "}

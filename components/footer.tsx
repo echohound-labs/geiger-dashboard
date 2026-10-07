@@ -1,20 +1,20 @@
 import { Addr } from "./ui";
-import { MAINNET_ORACLE, TELEGRAM_URL, TESTNET, explorerAddress, mainnetAddress } from "@/lib/config";
+import { MAINNET, TELEGRAM_URL, TESTNET, explorerAddress } from "@/lib/config";
 
 export const REPO_URL = "https://github.com/echohound-labs/geiger-dashboard";
 
 const networks = [
   {
-    name: MAINNET_ORACLE.label,
+    name: MAINNET.label,
     tone: "text-term-green",
-    programs: [{ label: `GERO ${MAINNET_ORACLE.version}`, id: MAINNET_ORACLE.program, href: mainnetAddress(MAINNET_ORACLE.program) }],
+    programs: [{ label: `GERO ${MAINNET.geroVersion}`, id: MAINNET.geroProgram, href: explorerAddress(MAINNET.geroProgram, MAINNET) }],
     note: "ENTROPY not launched",
   },
   {
     name: TESTNET.label,
     tone: "text-term-amber",
     programs: [
-      { label: "GERO", id: TESTNET.geroProgram, href: explorerAddress(TESTNET.geroProgram) },
+      { label: `GERO ${TESTNET.geroVersion}`, id: TESTNET.geroProgram, href: explorerAddress(TESTNET.geroProgram) },
       { label: "entropy-minter", id: TESTNET.minterProgram, href: explorerAddress(TESTNET.minterProgram) },
       { label: "eco-vault", id: TESTNET.ecoVaultProgram, href: explorerAddress(TESTNET.ecoVaultProgram) },
       { label: `${TESTNET.symbol} mint`, id: TESTNET.entropyMint, href: explorerAddress(TESTNET.entropyMint) },
@@ -23,12 +23,12 @@ const networks = [
   },
 ];
 
-/** On every page: the audit and legal-review warning, the repository, and the program addresses per network. */
+/** On every page: the security-review and legal-review note, the repository, and the program addresses per network. */
 export function Footer() {
   return (
     <footer className="mx-auto w-full max-w-6xl px-4 pb-8 sm:px-6">
       <div className="space-y-4 border-t border-term-line pt-5 font-mono text-xs text-term-text3">
-        <p className="text-sm text-term-amber">No third-party audit, no legal review.</p>
+        <p className="text-sm text-term-amber">Security review so far: Claude Code audit passes only. No legal review. A single operator runs one node.</p>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {networks.map((n) => (
             <div key={n.name}>

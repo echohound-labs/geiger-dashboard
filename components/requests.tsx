@@ -1,35 +1,20 @@
 import { Addr, Table } from "./ui";
-import { int } from "@/lib/format";
+import { int, slotsToDuration } from "@/lib/format";
+import type { OpenRequest } from "@/lib/chain";
 
-type Req = { address: string; requestSlot: number | bigint };
-
-/** Open randomness requests with an explorer link and, while pending, the slots left in the fulfil window. */
-export function RequestTable({
-  requests,
-  href,
-  slot,
-  window,
-}: {
-  requests: Req[];
-  href: (address: string) => string;
-  /** Current slot; with `window`, adds the slots left before the request becomes cancel-only. */
-  slot?: number | null;
-  window?: number;
-}) {
-  const left = (r: Req) => (slot == null || window === undefined ? null : Number(r.requestSlot) + window - slot);
+/** Open randomness requests: explorer link, request slot, age at `slot`, and the grid line they are bound to. */
+export function RequestTable({ requests, href, slot }: { requests: OpenRequest[]; href: (address: string) => string; slot: number }) {
   return (
     <Table
-      head={["Request", "Request slot", ...(window !== undefined ? ["Fulfil window"] : [])]}
-      rows={requests.map((r) => {
-        const l = left(r);
-        return [
-          <a key="r" className="underline decoration-term-line" href={href(r.address)} target="_blank" rel="noreferrer">
-            <Addr value={r.address} />
-          </a>,
-          int(r.requestSlot),
-          ...(window !== undefined ? [l === null ? "—" : `${int(Math.max(0, l))} slots left`] : []),
-        ];
-      })}
+      head={["Request", "Request slot", "Age", "Line · mask"]}
+      rows={requests.map((r) => [
+        <a key="r" className="underline decoration-term-line" href={href(r.address)} target="_blank" rel="noreferrer">
+          <Addr value={r.address} />
+        </a>,
+        int(r.requestSlot),
+        `${int(Math.max(0, slot - Number(r.requestSlot)))} slots (≈ ${slotsToDuration(Math.max(0, slot - Number(r.requestSlot)))})`,
+        r.mask === 0 ? <span key="l" className="text-term-text3">none (pre-v9)</span> : `${int(r.line)} · ${r.mask.toString(2).padStart(8, "0")}`,
+      ])}
     />
   );
 }

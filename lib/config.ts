@@ -1,12 +1,12 @@
 /**
  * lib/config.ts — every address and network constant the hub uses.
  *
- * The hub shows two networks side by side:
- *   X1 mainnet  GERO v8.1 (oracle only). MAINNET_ORACLE, read by lib/mainnet.ts.
- *   X1 testnet  GERO v9.1c and the ENTROPY minter (tENTROPY). NETWORK, read by
- *               lib/chain.ts and lib/tx.ts.
- * ENTROPY is not launched on mainnet, so the testnet GERO + ENTROPY view reads X1
- * testnet only; there is no mainnet entry for it.
+ * The hub shows two networks side by side, both running GERO v9.1c and both
+ * read by lib/chain.ts:
+ *   X1 mainnet  MAINNET: the oracle and its request fee. No line record and no
+ *               ENTROPY yet (no LineLog, no minter, no claims); those come later.
+ *   X1 testnet  TESTNET: the oracle, the line record and the ENTROPY minter
+ *               (tENTROPY). NETWORK is an alias for it; lib/tx.ts writes to it only.
  *
  * NEXT_PUBLIC_X1_TESTNET_RPC_URL overrides the testnet RPC endpoint (also used
  * by the wallet in the browser). X1_MAINNET_RPC_URL overrides the mainnet one
@@ -27,15 +27,17 @@ export interface NetworkConfig {
   name: NetworkName;
   label: string;
   rpcUrl: string;
-  /** GERO oracle program (owns OracleState, NodeStream, LineLog, requests). */
+  /** GERO oracle program (owns OracleState, NodeStream, LineBatch, requests, the fee pool and, where created, LineLog). */
   geroProgram: string;
   /** GERO version deployed at geroProgram, shown in the UI. The only place it is set. */
   geroVersion: string;
-  /** entropy-minter program (MinterState, Claimable, mint authority PDA). */
+  /** Build hash of the deployed program, shown next to the version when known. */
+  geroBuild?: string;
+  /** entropy-minter program (MinterState, Claimable, mint authority PDA). Empty while ENTROPY is not on this network. */
   minterProgram: string;
-  /** ENTROPY Token-2022 mint. Cross-checked against MinterState.mint. */
+  /** ENTROPY Token-2022 mint. Cross-checked against MinterState.mint. Empty while ENTROPY is not on this network. */
   entropyMint: string;
-  /** eco-vault program; its ["eco_vault"] PDA owns the vault token account. */
+  /** eco-vault program; its ["eco_vault"] PDA owns the vault token account. Empty while ENTROPY is not on this network. */
   ecoVaultProgram: string;
   /** Token symbol shown in the UI. */
   symbol: string;
@@ -64,36 +66,53 @@ export const TESTNET: NetworkConfig = {
   explorerQuery: "?cluster=testnet",
 };
 
-/** The testnet GERO + ENTROPY view. Always X1 testnet. */
+/**
+ * GERO v9.1c on X1 mainnet (upgraded 2026-10-06, unpaused at slot 84,127,097).
+ * Oracle and request fee only: the minter, mint and vault are empty until
+ * ENTROPY launches, so hasEntropy(MAINNET) is false and every ENTROPY reader
+ * returns "not on mainnet yet" instead of reading anything.
+ */
+export const MAINNET: NetworkConfig = {
+  name: "mainnet",
+  label: "X1 Mainnet",
+  rpcUrl: process.env.X1_MAINNET_RPC_URL || "https://rpc.mainnet.x1.xyz",
+  geroProgram: "BxUNg2yo5371BQMZPkfcxdCptFRDHkhvEXNM1QNPBRYU",
+  geroVersion: "v9.1c",
+  geroBuild: "4471baeb",
+  minterProgram: "",
+  entropyMint: "",
+  ecoVaultProgram: "",
+  symbol: "ENTROPY",
+  linesPerEra: 16_089_796,
+  explorer: "https://explorer.x1.xyz",
+  explorerQuery: "",
+};
+
+/** The testnet GERO + ENTROPY view and the only write target. Always X1 testnet. */
 export const NETWORK: NetworkConfig = TESTNET;
 
-/** GERO v8.1 on X1 mainnet: the live oracle. Addresses from the v8.1 dashboard. */
-export const MAINNET_ORACLE = {
-  label: "X1 Mainnet",
-  version: "v8.1",
-  rpcUrl: process.env.X1_MAINNET_RPC_URL || "https://rpc.mainnet.x1.xyz",
-  program: "BxUNg2yo5371BQMZPkfcxdCptFRDHkhvEXNM1QNPBRYU",
-  /** ["oracle_state"] under the program. */
-  oracleState: "BygMTZ1oLBD9tDmssnt9LkNT7BEd2PCJBCzurwtMuTqm",
-  /** ["entropy_pool"] under the program. */
-  entropyPool: "GDECYXCXietabJs9Y1baKzD3t4VFBw4eZWPnvYenyi77",
-  /** The node operator whose transactions make up the live feed. */
-  operator: "HGFisVbULNKqogtPuGTfcHG9y6i5nboZabYwifkiiodo",
-  explorer: "https://explorer.x1.xyz",
-} as const;
+export const NETWORKS: Record<NetworkName, NetworkConfig> = { mainnet: MAINNET, testnet: TESTNET };
 
-export function mainnetTx(signature: string): string {
-  return `${MAINNET_ORACLE.explorer}/tx/${signature}`;
+/** The config for a /[network] page. */
+export function networkConfig(name: NetworkName): NetworkConfig {
+  return NETWORKS[name];
 }
 
-export function mainnetAddress(address: string): string {
-  return `${MAINNET_ORACLE.explorer}/address/${address}`;
-}
-
-/** Fields that must be set before the selected network can be read. */
+/** Fields that must be set before GERO (the oracle) can be read on this network. */
 export function missingConfig(cfg: NetworkConfig = NETWORK): string[] {
-  const keys = ["rpcUrl", "geroProgram", "minterProgram", "entropyMint", "ecoVaultProgram"] as const;
+  const keys = ["rpcUrl", "geroProgram"] as const;
   return keys.filter((k) => !cfg[k]);
+}
+
+/** Fields that must be set before ENTROPY (minter, mint, vault, claims) can be read on this network. */
+export function missingEntropyConfig(cfg: NetworkConfig = NETWORK): string[] {
+  const keys = ["minterProgram", "entropyMint", "ecoVaultProgram"] as const;
+  return keys.filter((k) => !cfg[k]);
+}
+
+/** True once ENTROPY is deployed on this network (false on mainnet until launch). */
+export function hasEntropy(cfg: NetworkConfig = NETWORK): boolean {
+  return missingEntropyConfig(cfg).length === 0;
 }
 
 /**
@@ -102,7 +121,7 @@ export function missingConfig(cfg: NetworkConfig = NETWORK): string[] {
  * "not before launch" note.
  */
 export function writesAllowed(cfg: NetworkConfig = NETWORK): boolean {
-  return cfg.name === "testnet" && missingConfig(cfg).length === 0;
+  return cfg.name === "testnet" && missingConfig(cfg).length === 0 && hasEntropy(cfg);
 }
 
 export function explorerTx(signature: string, cfg: NetworkConfig = NETWORK): string {
@@ -119,13 +138,11 @@ export const ATA_PROGRAM = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL";
 export const LOADER_V3 = "BPFLoaderUpgradeab1e11111111111111111111111";
 
 /**
- * Display names for node cards, by node address: the EntropyNode account on mainnet, the node (operator) key on
- * testnet. The card title uses this; the on-chain name moves into the card's Details. Unmapped nodes keep their
- * on-chain name.
+ * Display names for node cards, by node (operator) key: the key in OracleState's node table on both networks.
+ * Unmapped nodes are shown as "Node <slot>".
  */
 export const NODE_NAMES: Record<string, string> = {
-  z4Psp8qVfP4t3jiWHE29rrisTPMC78tu8LmDhRSEL3s: "Genesis Node",
-  "3SXxcRMS47VXCyVWxsCddZbvmxWp2nU2b6fquD5eL8sC": "Legacy node (retired)",
+  HGFisVbULNKqogtPuGTfcHG9y6i5nboZabYwifkiiodo: "Genesis Node", // mainnet slot 0
   FB4jp1T1YB5ttaeCEvNisqPmVpqfQyet4WxN6HsQdqxh: "Genesis Node (testnet)", // testnet slot 0
 };
 

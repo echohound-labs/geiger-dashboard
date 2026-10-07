@@ -1,6 +1,10 @@
 /**
  * lib/chain.ts — the ONE typed data boundary of the hub. Every RPC read goes
  * through this module; pages and components never call the RPC themselves.
+ * Every reader takes a NetworkConfig (default: NETWORK = X1 testnet); the
+ * mainnet pages pass MAINNET. Both networks run GERO v9.1c with the same
+ * layouts; mainnet has no LineLog and no minter yet, so those readers return
+ * null / empty there instead of throwing (hasEntropy in lib/config.ts).
  *
  * Read-only: JSON-RPC getters only (getAccountInfo, getMultipleAccounts,
  * getProgramAccounts, getSlot, getSignaturesForAddress, getTransaction).
@@ -16,7 +20,8 @@
  *              RandomnessRequest; LL_O_* / LE_O_* / NS_* constants)
  *   minter    ~/entropy-token/programs/entropy-minter/src/{state.rs,constants.rs,line_log.rs}
  *   scripts   ~/entropy-token/scripts/supply_check.py (S2–S6, vault ATA, mint supply @36)
- *             ~/entropy-token/scripts/settle_crank.py (LineLog header checks, lag)
+ *             ~/entropy-token/scripts/settle_crank.py (LineLog header checks, lag; the backup
+ *             settler — on testnet the GERO node daemon settles, since 2026-10-05)
  *             ~/entropy-token/scripts/minter_init.py (claim PDA, Claimed / EcosystemClaimed events)
  * Only the fields the hub displays are decoded.
  */
@@ -24,7 +29,7 @@
 import { PublicKey } from "@solana/web3.js";
 import bs58 from "bs58";
 import { sha256 } from "js-sha256";
-import { ATA_PROGRAM, LOADER_V3, NETWORK, TOKEN_2022, missingConfig, type NetworkConfig } from "./config";
+import { ATA_PROGRAM, LOADER_V3, NETWORK, TOKEN_2022, hasEntropy, missingConfig, missingEntropyConfig, type NetworkConfig } from "./config";
 import {
   CAP,
   GENESIS,
@@ -39,8 +44,19 @@ import {
 // ─── Constants from the sources ──────────────────────────────────────────────
 
 // GERO lib.rs
-const ORACLE_STATE_V91B_LEN = 550; // v9.1a (502) + slash_prev + slash_from_line + pending_authority
-const ORACLE_STATE_V91C_LEN = 558; // v9.1b + request_fee_lamports after the Borsh struct (grown once by set_request_fee)
+const ORACLE_STATE_V91B_LEN = 550; // v9.1a (502) + slash_prev + slash_from_line + pending_authority; decoder fallback: a v9.1c account is also 550 B until its first set_request_fee
+const ORACLE_STATE_V91C_LEN = 558; // 550 + request_fee_lamports after the Borsh struct (grown once by set_request_fee)
+const ORACLE_STATE_O_VERIFIER = 454; // OracleState.verifier_program
+const ORACLE_STATE_O_REQUEST_FEE = 550; // u64 LE; absent (550-B account) = DEFAULT_REQUEST_FEE_LAMPORTS
+const DEFAULT_REQUEST_FEE_LAMPORTS = 50_000_000n; // 0.05 XNT
+const MAX_REQUEST_FEE_LAMPORTS = 100_000_000n; // 0.1 XNT cap (request_fee_of clamps)
+const REQUEST_FEE_POOL_LEN = 17; // 8 + collected u64 + bump
+/**
+ * Rent-exempt minimum for `len` data bytes: (128 B of account overhead + len) × 3,480 lamports per byte-year × 2
+ * years (X1 uses Solana's default rent). Checked against getMinimumBalanceForRentExemption on X1: 558 B = 4,774,560,
+ * 17 B = 1,009,200. Used to split request fees (lamports above rent) from an account's own rent.
+ */
+const rentExempt = (len: number) => BigInt(128 + len) * 6960n;
 const MAX_NODES = 8;
 const LINE_LOG_HEADER_LEN = 640;
 const LINE_ENTRY_LEN = 48;
@@ -76,8 +92,14 @@ const LINE_BATCH_LEN = 382;
 const REQUEST_LEN = 138;
 const REQUEST_STATUS_PENDING = 0;
 const REQUEST_STATUS_FULFILLED = 1;
-/** Fulfil is allowed while slot <= request_slot + 138 (FULFILL_MIN_DELAY 10 + MAX_BIND_WINDOW 128); then cancel-only. */
+/**
+ * v9.1c (N-1): a pending request cannot be cancelled for a refund until slot > request_slot + 138 (FULFILL_MIN_DELAY 10 +
+ * MAX_BIND_WINDOW 128), and after that only while it can be shown that it cannot be served (its line's batch never opened, is dead
+ * with no rollover, or does not cover its node mask). There is no fulfil deadline: a late fulfil is allowed.
+ */
 export const CANCEL_WINDOW_SLOTS = 138;
+/** Typical request-to-fulfil distance seen on both networks, slots (the VDF proof is checked on chain first). */
+export const TYPICAL_FULFIL_SLOTS = { min: 75, max: 80 };
 const LINE_MASK_BITS = (1n << 56n) - 1n;
 
 // minter state.rs
@@ -137,6 +159,23 @@ export interface OracleState {
   shadowMask: number;
   nodeStakeLamports: bigint;
   revealSlashLamports: bigint;
+  /** The standalone VDF verifier program (OracleState.verifier_program). */
+  verifierProgram: string;
+  /** Fee charged by request_randomness (v9.1c), lamports. */
+  requestFeeLamports: bigint;
+  /** False while the account is still 550 B (no set_request_fee yet): the default applies. */
+  feeSetOnChain: boolean;
+  /** Request fees charged into OracleState and not yet swept into the fee pool: lamports above its rent. */
+  unsweptFeeLamports: bigint;
+}
+
+/** ["request_fees"] (v9.1c RequestFeePool): fees swept in by the authority. Nothing can be paid out of it yet. */
+export interface FeePool {
+  address: string;
+  /** Lamports above the account's own rent: the swept fees it holds. */
+  heldLamports: bigint;
+  /** Running total ever swept in. */
+  collectedLamports: bigint;
 }
 
 export interface LineLogHeader {
@@ -178,6 +217,7 @@ export interface NodeStream {
 export interface LineBatchSummary {
   address: string;
   line: bigint;
+  boundSlot: bigint;
   operators: string[];
   mask: number;
   usedMask: number;
@@ -188,6 +228,7 @@ export interface LineBatchSummary {
 export interface FulfilledRequest {
   address: string;
   requester: string;
+  requestedAt: number; // unix seconds
   fulfilledAt: number; // unix seconds
   requestSlot: bigint;
   line: bigint;
@@ -272,13 +313,25 @@ function pda(seeds: Uint8Array[], program: string): string {
 
 const pk = (s: string) => new PublicKey(s).toBytes();
 
-export function addresses(cfg: NetworkConfig = NETWORK) {
-  const ecoAuthority = pda([utf8("eco_vault")], cfg.ecoVaultProgram);
+/** GERO PDAs. Present on every network (LineLog only once init_line_log has run: not on mainnet yet). */
+export function geroAddresses(cfg: NetworkConfig = NETWORK) {
   return {
-    minterState: pda([utf8("state")], cfg.minterProgram),
-    mintAuthority: pda([utf8("mint_authority")], cfg.minterProgram),
     oracleState: pda([utf8("oracle_state")], cfg.geroProgram),
     lineLog: pda([utf8("line_log")], cfg.geroProgram),
+    /** ["request_fees"]: the v9.1c request-fee pool, filled by sweep_request_fees. */
+    feePool: pda([utf8("request_fees")], cfg.geroProgram),
+  };
+}
+
+/** GERO, minter and vault PDAs. Throws where ENTROPY is not deployed (hasEntropy): callers on mainnet must not need it. */
+export function addresses(cfg: NetworkConfig = NETWORK) {
+  const missing = missingEntropyConfig(cfg);
+  if (missing.length) throw new ChainError(`ENTROPY is not on ${cfg.label} yet (missing: ${missing.join(", ")})`);
+  const ecoAuthority = pda([utf8("eco_vault")], cfg.ecoVaultProgram);
+  return {
+    ...geroAddresses(cfg),
+    minterState: pda([utf8("state")], cfg.minterProgram),
+    mintAuthority: pda([utf8("mint_authority")], cfg.minterProgram),
     ecoAuthority,
     /** Token-2022 ATA of the ["eco_vault"] PDA for the mint (supply_check.py S10). */
     ecoVault: (mint: string) => pda([pk(ecoAuthority), pk(TOKEN_2022), pk(mint)], ATA_PROGRAM),
@@ -326,34 +379,39 @@ function toRaw(address: string, v: RpcAccount | null): RawAccount | null {
   return v ? { address, owner: v.owner, lamports: v.lamports, data: b64(v.data[0]) } : null;
 }
 
-export async function getSlot(): Promise<number> {
-  return rpc<number>("getSlot", [{ commitment: COMMITMENT }]);
+export async function getSlot(cfg: NetworkConfig = NETWORK): Promise<number> {
+  return rpc<number>("getSlot", [{ commitment: COMMITMENT }], cfg);
 }
 
-async function getAccount(address: string, slice?: { offset: number; length: number }): Promise<RawAccount | null> {
+async function getAccount(address: string, slice?: { offset: number; length: number }, cfg: NetworkConfig = NETWORK): Promise<RawAccount | null> {
   const opts: Record<string, unknown> = { encoding: "base64", commitment: COMMITMENT };
   if (slice) opts.dataSlice = slice;
-  const r = await rpc<{ value: RpcAccount | null }>("getAccountInfo", [address, opts]);
+  const r = await rpc<{ value: RpcAccount | null }>("getAccountInfo", [address, opts], cfg);
   return toRaw(address, r.value);
 }
 
-async function getAccounts(addrs: string[]): Promise<(RawAccount | null)[]> {
+async function getAccounts(addrs: string[], cfg: NetworkConfig = NETWORK): Promise<(RawAccount | null)[]> {
   const out: (RawAccount | null)[] = [];
   for (let i = 0; i < addrs.length; i += 100) {
     const chunk = addrs.slice(i, i + 100);
     const r = await rpc<{ value: (RpcAccount | null)[] }>("getMultipleAccounts", [
       chunk,
       { encoding: "base64", commitment: COMMITMENT },
-    ]);
+    ], cfg);
     r.value.forEach((v, j) => out.push(toRaw(chunk[j], v)));
   }
   return out;
 }
 
-async function getProgramAccounts(program: string, filters: unknown[], slice?: { offset: number; length: number }): Promise<RawAccount[]> {
+async function getProgramAccounts(
+  program: string,
+  filters: unknown[],
+  slice?: { offset: number; length: number },
+  cfg: NetworkConfig = NETWORK,
+): Promise<RawAccount[]> {
   const opts: Record<string, unknown> = { encoding: "base64", commitment: COMMITMENT, filters };
   if (slice) opts.dataSlice = slice;
-  const r = await rpc<{ pubkey: string; account: RpcAccount }[]>("getProgramAccounts", [program, opts]);
+  const r = await rpc<{ pubkey: string; account: RpcAccount }[]>("getProgramAccounts", [program, opts], cfg);
   return r.map((x) => toRaw(x.pubkey, x.account)!);
 }
 
@@ -361,10 +419,11 @@ const memcmp = (offset: number, bytes: Uint8Array) => ({ memcmp: { offset, bytes
 
 // ─── Minter ──────────────────────────────────────────────────────────────────
 
-/** MinterState, state.rs (200 B). Null if the minter is not initialized. */
+/** MinterState, state.rs (200 B). Null if the minter is not initialized, or not deployed on this network at all. */
 export async function getMinterState(cfg: NetworkConfig = NETWORK): Promise<MinterState | null> {
+  if (!hasEntropy(cfg)) return null;
   const address = addresses(cfg).minterState;
-  const a = await getAccount(address);
+  const a = await getAccount(address, undefined, cfg);
   if (!a) return null;
   const d = a.data;
   if (a.owner !== cfg.minterProgram || d.length !== STATE_LEN || !eq(d.subarray(0, 8), disc("MinterState"))) {
@@ -403,7 +462,8 @@ function decodeClaim(a: RawAccount | null, cfg: NetworkConfig, payee?: string): 
 
 /** Every Claimable (supply_check.py claim_accounts: dataSize 64 + discriminator). */
 export async function getClaimAccounts(cfg: NetworkConfig = NETWORK): Promise<ClaimAccount[]> {
-  const accts = await getProgramAccounts(cfg.minterProgram, [{ dataSize: CLAIM_LEN }, memcmp(0, disc("Claimable"))]);
+  if (!hasEntropy(cfg)) return [];
+  const accts = await getProgramAccounts(cfg.minterProgram, [{ dataSize: CLAIM_LEN }, memcmp(0, disc("Claimable"))], undefined, cfg);
   const out: ClaimAccount[] = [];
   for (const a of accts) {
     const c = decodeClaim(a, cfg);
@@ -416,25 +476,27 @@ export async function getClaimAccounts(cfg: NetworkConfig = NETWORK): Promise<Cl
 /** The claim account of `payee` at its canonical PDA, or null if none exists yet. */
 export async function getClaim(payee: string, cfg: NetworkConfig = NETWORK): Promise<{ address: string; claim: ClaimAccount | null }> {
   const address = claimAddress(payee, cfg);
-  return { address, claim: decodeClaim(await getAccount(address), cfg, payee) };
+  return { address, claim: decodeClaim(await getAccount(address, undefined, cfg), cfg, payee) };
 }
 
+/** Claim accounts by payee; every value null where ENTROPY is not deployed. */
 async function getClaimsFor(payees: string[], cfg: NetworkConfig): Promise<Map<string, ClaimAccount | null>> {
   const uniq = Array.from(new Set(payees));
-  const accts = await getAccounts(uniq.map((p) => claimAddress(p, cfg)));
+  if (!hasEntropy(cfg)) return new Map(uniq.map((p) => [p, null]));
+  const accts = await getAccounts(uniq.map((p) => claimAddress(p, cfg)), cfg);
   return new Map(uniq.map((p, i) => [p, decodeClaim(accts[i], cfg, p)]));
 }
 
 /** Token-2022 mint: supply @36, decimals @44 (supply_check.py S7). */
-export async function getMintSupply(mint: string): Promise<{ supply: bigint; decimals: number; owner: string } | null> {
-  const a = await getAccount(mint);
+export async function getMintSupply(mint: string, cfg: NetworkConfig = NETWORK): Promise<{ supply: bigint; decimals: number; owner: string } | null> {
+  const a = await getAccount(mint, undefined, cfg);
   if (!a || a.data.length < 82) return null;
   return { supply: u64(a.data, 36), decimals: a.data[44], owner: a.owner };
 }
 
 /** Token account amount @64, or null if the account does not exist. */
-async function getTokenBalance(address: string): Promise<bigint | null> {
-  const a = await getAccount(address);
+async function getTokenBalance(address: string, cfg: NetworkConfig = NETWORK): Promise<bigint | null> {
+  const a = await getAccount(address, undefined, cfg);
   return a && a.owner === TOKEN_2022 && a.data.length >= 72 ? u64(a.data, 64) : null;
 }
 
@@ -444,11 +506,12 @@ async function getTokenBalance(address: string): Promise<bigint | null> {
  * OracleState (Borsh, lib.rs). Offsets: authority 8, total_nodes 40,
  * total_requests 48, total_fulfillments 56, paused 64, nodes 98 (8 × 41 B:
  * operator, committed_through_line, active), shadow mask ("reserved") 429,
- * node_stake_lamports 430, reveal_slash_lamports 438, verifier_program 454.
+ * node_stake_lamports 430, reveal_slash_lamports 438, verifier_program 454,
+ * request_fee_lamports 550 (v9.1c, only once the account is 558 B).
  */
 export async function getOracleState(cfg: NetworkConfig = NETWORK): Promise<OracleState> {
-  const address = addresses(cfg).oracleState;
-  const a = await getAccount(address);
+  const address = geroAddresses(cfg).oracleState;
+  const a = await getAccount(address, undefined, cfg);
   if (!a || a.owner !== cfg.geroProgram || !eq(a.data.subarray(0, 8), disc("OracleState"))) {
     throw new ChainError(`OracleState ${address} not found or not a GERO OracleState`);
   }
@@ -459,8 +522,20 @@ export async function getOracleState(cfg: NetworkConfig = NETWORK): Promise<Orac
     const o = 98 + 41 * i;
     nodes.push({ operator: key(d, o), committedThroughLine: u64(d, o + 32), active: d[o + 40] === 1 });
   }
+  // Layout by length. 550 B is also a v9.1c account before its first set_request_fee (the default fee applies).
   const layout =
-    d.length === ORACLE_STATE_V91C_LEN ? "v9.1c" : d.length === ORACLE_STATE_V91B_LEN ? "v9.1b" : d.length === 502 ? "v9.1a" : d.length === 486 ? "v9" : `unknown (${d.length} B)`;
+    d.length === ORACLE_STATE_V91C_LEN
+      ? "v9.1c"
+      : d.length === ORACLE_STATE_V91B_LEN
+        ? "v9.1 (request fee not set)"
+        : d.length === 502
+          ? "v9.1a"
+          : d.length === 486
+            ? "v9"
+            : `unknown (${d.length} B)`;
+  const feeSetOnChain = d.length >= ORACLE_STATE_V91C_LEN;
+  const fee = feeSetOnChain ? u64(d, ORACLE_STATE_O_REQUEST_FEE) : DEFAULT_REQUEST_FEE_LAMPORTS;
+  const rent = rentExempt(d.length);
   return {
     address,
     length: d.length,
@@ -473,25 +548,42 @@ export async function getOracleState(cfg: NetworkConfig = NETWORK): Promise<Orac
     shadowMask: d[429],
     nodeStakeLamports: u64(d, 430),
     revealSlashLamports: u64(d, 438),
+    verifierProgram: key(d, ORACLE_STATE_O_VERIFIER),
+    requestFeeLamports: fee < MAX_REQUEST_FEE_LAMPORTS ? fee : MAX_REQUEST_FEE_LAMPORTS,
+    feeSetOnChain,
+    unsweptFeeLamports: BigInt(a.lamports) > rent ? BigInt(a.lamports) - rent : 0n,
+  };
+}
+
+/** The request-fee pool (v9.1c). Null until init_request_fee_pool has run. */
+export async function getFeePool(cfg: NetworkConfig = NETWORK): Promise<FeePool | null> {
+  const address = geroAddresses(cfg).feePool;
+  const a = await getAccount(address, undefined, cfg);
+  if (!a || a.owner !== cfg.geroProgram || a.data.length < REQUEST_FEE_POOL_LEN || !eq(a.data.subarray(0, 8), disc("RequestFeePool"))) return null;
+  const rent = rentExempt(a.data.length);
+  return {
+    address,
+    heldLamports: BigInt(a.lamports) > rent ? BigInt(a.lamports) - rent : 0n,
+    collectedLamports: u64(a.data, 8),
   };
 }
 
 /** Last deploy slot and upgrade authority of an upgradeable program (loader v3 ProgramData). */
-export async function getProgramInfo(program: string): Promise<{ deploySlot: bigint; upgradeAuthority: string | null } | null> {
-  const p = await getAccount(program);
+export async function getProgramInfo(program: string, cfg: NetworkConfig = NETWORK): Promise<{ deploySlot: bigint; upgradeAuthority: string | null } | null> {
+  const p = await getAccount(program, undefined, cfg);
   if (!p || p.owner !== LOADER_V3 || p.data.length < 36) return null;
-  const pd = await getAccount(key(p.data, 4), { offset: 0, length: 45 });
+  const pd = await getAccount(key(p.data, 4), { offset: 0, length: 45 }, cfg);
   if (!pd || pd.data.length < 13) return null;
   return { deploySlot: u64(pd.data, 4), upgradeAuthority: pd.data[12] === 0 ? null : key(pd.data, 13) };
 }
 
-/** LineLog header (640 B) with the settle_crank.py / line_log.rs checks. */
+/** LineLog header (640 B) with the settle_crank.py / line_log.rs checks. Null where no line record exists (mainnet today). */
 export async function getLineLogHeader(cfg: NetworkConfig = NETWORK): Promise<LineLogHeader | null> {
-  const address = addresses(cfg).lineLog;
+  const address = geroAddresses(cfg).lineLog;
   const r = await rpc<{ value: (RpcAccount & { space?: number }) | null }>("getAccountInfo", [
     address,
     { encoding: "base64", commitment: COMMITMENT, dataSlice: { offset: 0, length: LINE_LOG_HEADER_LEN } },
-  ]);
+  ], cfg);
   if (!r.value) return null;
   const d = b64(r.value.data[0]);
   const h = d.length >= 12 ? u16(d, LL_O_H) : 0;
@@ -520,7 +612,7 @@ export async function getLineLogHeader(cfg: NetworkConfig = NETWORK): Promise<Li
  * only the needed part of the 1.5 MB account crosses the wire. An entry is
  * returned only if it holds that line (the ring slot may hold an older one).
  */
-export async function getLineEntries(header: LineLogHeader, first: bigint, last: bigint): Promise<Map<bigint, LineEntry>> {
+export async function getLineEntries(header: LineLogHeader, first: bigint, last: bigint, cfg: NetworkConfig = NETWORK): Promise<Map<bigint, LineEntry>> {
   const out = new Map<bigint, LineEntry>();
   if (header.defect || last < first) return out;
   const H = BigInt(header.h);
@@ -532,7 +624,7 @@ export async function getLineEntries(header: LineLogHeader, first: bigint, last:
   ranges.push({ idx: startIdx, n: n1, firstLine: first });
   if (n1 < count) ranges.push({ idx: 0, n: count - n1, firstLine: first + BigInt(n1) });
   for (const r of ranges) {
-    const a = await getAccount(header.address, { offset: LINE_LOG_HEADER_LEN + LINE_ENTRY_LEN * r.idx, length: LINE_ENTRY_LEN * r.n });
+    const a = await getAccount(header.address, { offset: LINE_LOG_HEADER_LEN + LINE_ENTRY_LEN * r.idx, length: LINE_ENTRY_LEN * r.n }, cfg);
     if (!a) continue;
     for (let k = 0; k < r.n; k++) {
       const o = LINE_ENTRY_LEN * k;
@@ -555,7 +647,7 @@ export async function getLineEntries(header: LineLogHeader, first: bigint, last:
 /** NodeStream (+ NodeStreamExt at 2,888 once grown), lib.rs. */
 export async function getNodeStreams(operators: string[], cfg: NetworkConfig = NETWORK): Promise<Map<string, NodeStream | null>> {
   const addrs = operators.map((o) => streamAddress(o, cfg));
-  const accts = await getAccounts(addrs);
+  const accts = await getAccounts(addrs, cfg);
   const out = new Map<string, NodeStream | null>();
   operators.forEach((op, i) => {
     const a = accts[i];
@@ -587,35 +679,48 @@ export async function getNodeStreams(operators: string[], cfg: NetworkConfig = N
 }
 
 /**
- * Open LineBatch accounts (382 B; closed LINE_CLOSE_DELAY_SLOTS = 512 slots
- * after the line, so this only covers the most recent ~64 lines). Borsh: line 8,
- * operators 120 (8 × 32), mask 376, used_mask 377, slashed_mask 379, dead 380.
+ * Open LineBatch accounts (382 B). A batch may be closed LINE_CLOSE_DELAY_SLOTS = 512 slots after its line, but
+ * v9.1c keeps one with requests for BATCH_RETAIN_SLOTS = 250,000 slots (about a day), so a request whose batch is
+ * live can never refund by waiting it out. Borsh: line 8, bound_slot 16, operators 120 (8 × 32), mask 376,
+ * used_mask 377, slashed_mask 379, dead 380. Newest line first.
  */
 export async function getOpenLineBatches(cfg: NetworkConfig = NETWORK): Promise<LineBatchSummary[]> {
-  const accts = await getProgramAccounts(cfg.geroProgram, [{ dataSize: LINE_BATCH_LEN }, memcmp(0, disc("LineBatch"))]);
-  return accts.map((a) => {
-    const d = a.data;
-    const operators = [];
-    for (let i = 0; i < MAX_NODES; i++) operators.push(key(d, 120 + 32 * i));
-    return { address: a.address, line: u64(d, 8), operators, mask: d[376], usedMask: d[377], slashedMask: d[379], dead: d[380] === 1 };
-  });
+  const accts = await getProgramAccounts(cfg.geroProgram, [{ dataSize: LINE_BATCH_LEN }, memcmp(0, disc("LineBatch"))], undefined, cfg);
+  return accts
+    .map((a) => {
+      const d = a.data;
+      const operators = [];
+      for (let i = 0; i < MAX_NODES; i++) operators.push(key(d, 120 + 32 * i));
+      return {
+        address: a.address,
+        line: u64(d, 8),
+        boundSlot: u64(d, 16),
+        operators,
+        mask: d[376],
+        usedMask: d[377],
+        slashedMask: d[379],
+        dead: d[380] === 1,
+      };
+    })
+    .sort((x, y) => (y.line > x.line ? 1 : y.line < x.line ? -1 : 0));
 }
 
 /**
  * Fulfilled RandomnessRequest accounts (138 B, status byte 104 == 1). Borsh:
- * requester 8, status 104, fulfilled_at 113 (i64), request_slot 122,
- * binding 130 (line = low 56 bits).
+ * requester 8, status 104, requested_at 105 (i64), fulfilled_at 113 (i64),
+ * request_slot 122, binding 130 (line = low 56 bits, node mask = high 8).
  */
 export async function getFulfilledRequests(limit: number, cfg: NetworkConfig = NETWORK): Promise<FulfilledRequest[]> {
   const accts = await getProgramAccounts(cfg.geroProgram, [
     { dataSize: REQUEST_LEN },
     memcmp(0, disc("RandomnessRequest")),
     memcmp(104, new Uint8Array([REQUEST_STATUS_FULFILLED])),
-  ]);
+  ], undefined, cfg);
   return accts
     .map((a) => ({
       address: a.address,
       requester: key(a.data, 8),
+      requestedAt: Number(i64(a.data, 105)),
       fulfilledAt: Number(i64(a.data, 113)),
       requestSlot: u64(a.data, 122),
       line: u64(a.data, 130) & LINE_MASK_BITS,
@@ -624,24 +729,53 @@ export async function getFulfilledRequests(limit: number, cfg: NetworkConfig = N
     .slice(0, limit);
 }
 
+export type OpenRequestKind = "recent" | "late" | "legacy";
+
 export interface OpenRequest {
   address: string;
   requester: string;
   requestSlot: bigint;
+  /** Slots since the request at the slot the page was read. */
+  ageSlots: number;
+  /** Grid line the request is bound to and the node mask it was bound against (binding bytes 130..138). */
+  line: bigint;
+  mask: number;
+  /**
+   * recent: inside the first 138 slots, normally served in about 75–80; cannot be cancelled yet.
+   * late: older than 138 slots with a v9 binding; still served if its batch is live, refundable only if it
+   * demonstrably cannot be (v9.1c N-1). legacy: mask 0, a pre-v9 request that v9 can never serve; refundable.
+   */
+  kind: OpenRequestKind;
 }
 
-/** Pending (status 0) RandomnessRequest accounts, split by the fulfil window at `slot`. */
-export async function getOpenRequests(slot: number, cfg: NetworkConfig = NETWORK): Promise<{ pending: OpenRequest[]; expired: OpenRequest[] }> {
+export interface OpenRequests {
+  recent: OpenRequest[];
+  late: OpenRequest[];
+  legacy: OpenRequest[];
+}
+
+/** Pending (status 0) RandomnessRequest accounts at `slot`, newest first, classified for the v9.1c cancel rule. */
+export async function getOpenRequests(slot: number, cfg: NetworkConfig = NETWORK): Promise<OpenRequests> {
   const accts = await getProgramAccounts(cfg.geroProgram, [
     { dataSize: REQUEST_LEN },
     memcmp(0, disc("RandomnessRequest")),
     memcmp(104, new Uint8Array([REQUEST_STATUS_PENDING])),
-  ]);
+  ], undefined, cfg);
   const open = accts
-    .map((a) => ({ address: a.address, requester: key(a.data, 8), requestSlot: u64(a.data, 122) }))
-    .sort((x, y) => (y.requestSlot > x.requestSlot ? 1 : -1));
-  const inWindow = (r: OpenRequest) => r.requestSlot + BigInt(CANCEL_WINDOW_SLOTS) >= BigInt(slot);
-  return { pending: open.filter(inWindow), expired: open.filter((r) => !inWindow(r)) };
+    .map((a): OpenRequest => {
+      const requestSlot = u64(a.data, 122);
+      const binding = u64(a.data, 130);
+      const mask = Number(binding >> 56n);
+      const ageSlots = Math.max(0, slot - Number(requestSlot));
+      const kind: OpenRequestKind = mask === 0 ? "legacy" : ageSlots <= CANCEL_WINDOW_SLOTS ? "recent" : "late";
+      return { address: a.address, requester: key(a.data, 8), requestSlot, ageSlots, line: binding & LINE_MASK_BITS, mask, kind };
+    })
+    .sort((x, y) => (y.requestSlot > x.requestSlot ? 1 : y.requestSlot < x.requestSlot ? -1 : 0));
+  return {
+    recent: open.filter((r) => r.kind === "recent"),
+    late: open.filter((r) => r.kind === "late"),
+    legacy: open.filter((r) => r.kind === "legacy"),
+  };
 }
 
 // ─── Minter events (claims) ──────────────────────────────────────────────────
@@ -717,6 +851,8 @@ export async function getRecentClaimEvents(accounts: string[], perAccount: numbe
 }
 
 // ─── Page views ──────────────────────────────────────────────────────────────
+// One reader per page, each taking the page's NetworkConfig. Where the network has no line record (no LineLog) or no
+// ENTROPY (no minter), the matching fields are null / empty and the page says "not on mainnet yet".
 
 export type CheckStatus = "PASS" | "WARN" | "FAIL";
 export interface Check {
@@ -730,14 +866,21 @@ export interface NetworkView {
   currentLine: bigint;
   oracle: OracleState;
   program: { deploySlot: bigint; upgradeAuthority: string | null } | null;
+  /** Null where no line record exists (mainnet today). */
   lineLog: LineLogHeader | null;
   newestLine: bigint | null;
   freshnessLines: bigint | null;
+  /** Highest line any listed node has committed through, minus the current line: nodes commit ahead, so ≥ 0 when a node is up. */
+  commitLead: bigint | null;
   live: boolean;
   ringWindow: { first: bigint; last: bigint; produced: number; verified: number; withRequests: number; dead: number };
   nodesOnline: number;
   nodesListed: number;
+  /** Null where ENTROPY is not deployed or the minter is not initialized. */
   linesPaidSettled: bigint | null;
+  feePool: FeePool | null;
+  /** Median request-to-fulfil time over the newest v9-bound fulfilled requests (requested_at → fulfilled_at), seconds. */
+  fulfilSeconds: { median: number; sample: number } | null;
 }
 
 const ONLINE_SLACK_LINES = 4n;
@@ -747,13 +890,27 @@ function isOnline(n: { active: boolean; committedThroughLine: bigint }, currentL
   return n.active && n.committedThroughLine + ONLINE_SLACK_LINES >= currentLine;
 }
 
-export async function getNetworkView(): Promise<NetworkView> {
-  const [slot, oracle, program, lineLog, minter] = await Promise.all([
-    getSlot(),
-    getOracleState(),
-    getProgramInfo(NETWORK.geroProgram),
-    getLineLogHeader(),
-    getMinterState(),
+const isZeroKey = (k: string) => k === "11111111111111111111111111111111";
+
+function median(xs: number[]): number | null {
+  if (xs.length === 0) return null;
+  const s = [...xs].sort((a, b) => a - b);
+  const m = s.length >> 1;
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+/** How many of the newest fulfilled requests the fulfilment-time figure is taken over. */
+const FULFIL_SAMPLE = 20;
+
+export async function getNetworkView(cfg: NetworkConfig = NETWORK): Promise<NetworkView> {
+  const [slot, oracle, program, lineLog, minter, feePool, fulfilled] = await Promise.all([
+    getSlot(cfg),
+    getOracleState(cfg),
+    getProgramInfo(cfg.geroProgram, cfg),
+    getLineLogHeader(cfg),
+    getMinterState(cfg),
+    getFeePool(cfg).catch(() => null),
+    getRecentFulfillments(FULFIL_SAMPLE, cfg).catch(() => []),
   ]);
   const currentLine = BigInt(slot) / BigInt(LINE_SLOTS);
   let newestLine: bigint | null = null;
@@ -761,7 +918,7 @@ export async function getNetworkView(): Promise<NetworkView> {
   if (lineLog && !lineLog.defect) {
     ring.last = currentLine;
     ring.first = currentLine - BigInt(lineLog.h) + 1n;
-    const entries = await getLineEntries(lineLog, ring.first, ring.last);
+    const entries = await getLineEntries(lineLog, ring.first, ring.last, cfg);
     entries.forEach((e) => {
       if (!(e.flags & LINE_FLAG_FINAL)) return;
       if (e.onTimeMask !== 0) {
@@ -775,6 +932,14 @@ export async function getNetworkView(): Promise<NetworkView> {
   }
   const freshnessLines = newestLine === null ? null : currentLine - (newestLine as bigint);
   const listed = oracle.nodes.filter((n) => !isZeroKey(n.operator));
+  const nodesOnline = listed.filter((n) => isOnline(n, currentLine)).length;
+  const committed = listed.filter((n) => n.active).map((n) => n.committedThroughLine);
+  const commitLead = committed.length ? committed.reduce((a, b) => (b > a ? b : a)) - currentLine : null;
+  // With a line record, live means an on-time line inside the write cutoff; without one, a node committing on time.
+  const live = !oracle.paused && (lineLog ? freshnessLines !== null && freshnessLines <= BigInt(LINE_LOG_WRITE_CUTOFF_LINES) : nodesOnline > 0);
+  // v9 requests only (mask ≠ 0): the newest fulfilled on mainnet still include pre-upgrade ones served by v8.
+  const secs = fulfilled.filter((f) => f.mask !== 0 && f.requestedAt > 0 && f.fulfilledAt >= f.requestedAt).map((f) => f.fulfilledAt - f.requestedAt);
+  const med = median(secs);
   return {
     slot,
     currentLine,
@@ -783,11 +948,14 @@ export async function getNetworkView(): Promise<NetworkView> {
     lineLog,
     newestLine,
     freshnessLines,
-    live: !oracle.paused && freshnessLines !== null && freshnessLines <= BigInt(LINE_LOG_WRITE_CUTOFF_LINES),
+    commitLead,
+    live,
     ringWindow: ring,
-    nodesOnline: listed.filter((n) => isOnline(n, currentLine)).length,
+    nodesOnline,
     nodesListed: listed.length,
     linesPaidSettled: minter?.linesPaid ?? null,
+    feePool,
+    fulfilSeconds: med === null ? null : { median: med, sample: secs.length },
   };
 }
 
@@ -803,14 +971,16 @@ export interface NodeView {
   pendingPayout: { to: string; applySlot: bigint; slotsLeft: number } | null;
   stakeLamports: bigint | null;
   committedThroughLine: bigint;
+  /** Null without a line record, or while the node is not earning yet. */
   onTime: { hits: number; lines: number; first: bigint; last: bigint } | null;
   slashesOpen: number;
   missesOpen: number;
   claim: ClaimAccount | null;
-  claimAddress: string;
+  /** Null where ENTROPY is not deployed. */
+  claimAddress: string | null;
   /** Shadow week end and slots left, while shadow and the approval slot is known. */
   shadowEnds: { slot: bigint; slotsLeft: number } | null;
-  /** On-time bit for each of the last RECENT_LINES final lines, oldest first (earning nodes only). */
+  /** On-time bit for each of the last RECENT_LINES final lines, oldest first (earning nodes with a line record only). */
   recent: { line: bigint; onTime: boolean }[];
   /** Consecutive on-time final lines ending at the newest one. */
   streak: number;
@@ -824,23 +994,24 @@ export interface NodesView {
   window: number;
   requiredStakeLamports: bigint;
   slashLamports: bigint;
+  /** "missing" where no line record exists; a line_log.rs check name when one exists but is unusable. */
   lineLogDefect: string | null;
+  hasLineRecord: boolean;
+  hasEntropy: boolean;
   nodes: NodeView[];
 }
-
-const isZeroKey = (k: string) => k === "11111111111111111111111111111111";
 
 /**
  * Listed node slots with their operator and payout address: the LineLog header
  * payout (what the minter pays) when set, else the NodeStream payout, else the
  * operator itself.
  */
-async function nodePayouts(oracle: OracleState, header: LineLogHeader | null) {
+async function nodePayouts(oracle: OracleState, header: LineLogHeader | null, cfg: NetworkConfig) {
   const slots = oracle.nodes
     .map((n, i) => ({ ...n, index: i }))
     .filter((n) => !isZeroKey(n.operator) || (header && !isZeroKey(header.nodeOperator[n.index])));
   const operators = slots.map((n) => (isZeroKey(n.operator) ? header!.nodeOperator[n.index] : n.operator));
-  const streams = await getNodeStreams(operators);
+  const streams = await getNodeStreams(operators, cfg);
   const payouts = slots.map((n, k) => {
     const hp = header?.nodePayout[n.index];
     return hp && !isZeroKey(hp) ? hp : streams.get(operators[k])?.ext?.payout ?? operators[k];
@@ -848,22 +1019,24 @@ async function nodePayouts(oracle: OracleState, header: LineLogHeader | null) {
   return { slots, operators, streams, payouts };
 }
 
-export async function getNodesView(windowLines = 2048): Promise<NodesView> {
-  const [slot, oracle, header, batches] = await Promise.all([getSlot(), getOracleState(), getLineLogHeader(), getOpenLineBatches()]);
+export async function getNodesView(windowLines = 2048, cfg: NetworkConfig = NETWORK): Promise<NodesView> {
+  const [slot, oracle, header, batches] = await Promise.all([getSlot(cfg), getOracleState(cfg), getLineLogHeader(cfg), getOpenLineBatches(cfg)]);
   const currentLine = BigInt(slot) / BigInt(LINE_SLOTS);
   // Only lines past the write cutoff are final for on-time accounting.
   const last = currentLine - BigInt(LINE_LOG_WRITE_CUTOFF_LINES) - 1n;
   const first = last - BigInt(windowLines) + 1n;
-  const entries = header ? await getLineEntries(header, first, last) : new Map<bigint, LineEntry>();
+  const entries = header ? await getLineEntries(header, first, last, cfg) : new Map<bigint, LineEntry>();
 
-  const { slots, operators, streams, payouts } = await nodePayouts(oracle, header);
-  const claims = await getClaimsFor(payouts, NETWORK);
+  const { slots, operators, streams, payouts } = await nodePayouts(oracle, header, cfg);
+  const claims = await getClaimsFor(payouts, cfg);
+  const entropy = hasEntropy(cfg);
 
   const nodes: NodeView[] = slots.map((n, k) => {
     const operator = operators[k];
     const stream = streams.get(operator) ?? null;
     const afl = header ? header.nodeActiveFromLine[n.index] : null;
-    const shadow = afl === LINE_LOG_EMPTY_SLOT;
+    // Shadow: the line record says so (empty active-from line) or, without one, OracleState's shadow mask does.
+    const shadow = header ? afl === LINE_LOG_EMPTY_SLOT : (oracle.shadowMask & (1 << n.index)) !== 0;
     let status: NodeStatus;
     let statusNote = "";
     if (!isOnline(n, currentLine)) {
@@ -932,7 +1105,7 @@ export async function getNodesView(windowLines = 2048): Promise<NodesView> {
       slashesOpen,
       missesOpen,
       claim: claims.get(payouts[k]) ?? null,
-      claimAddress: claimAddress(payouts[k]),
+      claimAddress: entropy ? claimAddress(payouts[k], cfg) : null,
       shadowEnds,
       recent,
       streak,
@@ -946,6 +1119,8 @@ export async function getNodesView(windowLines = 2048): Promise<NodesView> {
     requiredStakeLamports: oracle.nodeStakeLamports,
     slashLamports: oracle.revealSlashLamports,
     lineLogDefect: header ? header.defect : "missing",
+    hasLineRecord: header !== null,
+    hasEntropy: entropy,
     nodes,
   };
 }
@@ -994,13 +1169,15 @@ function supplyChecks(s: MinterState, supply: bigint | null, sumAccrued: bigint,
   return c;
 }
 
-export async function getEntropyView(): Promise<EntropyView> {
-  const [slot, state, claims] = await Promise.all([getSlot(), getMinterState(), getClaimAccounts()]);
+/** The ENTROPY page. Throws where ENTROPY is not deployed (mainnet) or the minter is not initialized. */
+export async function getEntropyView(cfg: NetworkConfig = NETWORK): Promise<EntropyView> {
+  if (!hasEntropy(cfg)) throw new ChainError(`ENTROPY is not on ${cfg.label} yet`);
+  const [slot, state, claims] = await Promise.all([getSlot(cfg), getMinterState(cfg), getClaimAccounts(cfg)]);
   if (!state) throw new ChainError("the minter is not initialized on this network");
   const currentLine = BigInt(slot) / BigInt(LINE_SLOTS);
-  const ecoVault = addresses().ecoVault(state.mint);
-  const [mint, ecoVaultBalance] = await Promise.all([getMintSupply(state.mint), getTokenBalance(ecoVault)]);
-  const n = NETWORK.linesPerEra;
+  const ecoVault = addresses(cfg).ecoVault(state.mint);
+  const [mint, ecoVaultBalance] = await Promise.all([getMintSupply(state.mint, cfg), getTokenBalance(ecoVault, cfg)]);
+  const n = cfg.linesPerEra;
   const sumAccrued = claims.reduce((a, c) => a + c.accrued, 0n);
   const sumClaimed = claims.reduce((a, c) => a + c.totalClaimed, 0n);
   const era = eraOf(state.startLine, currentLine, n);
@@ -1010,7 +1187,7 @@ export async function getEntropyView(): Promise<EntropyView> {
     slot,
     currentLine,
     state,
-    mintMatchesConfig: state.mint === NETWORK.entropyMint,
+    mintMatchesConfig: state.mint === cfg.entropyMint,
     supply,
     minted: GENESIS + state.claimed + state.ecoClaimed,
     era,
@@ -1032,9 +1209,13 @@ export async function getEntropyView(): Promise<EntropyView> {
 export interface ActivityView {
   slot: number;
   currentLine: bigint;
-  lines: (LineEntry | { line: bigint; missing: true })[];
+  /** Null where no line record exists (mainnet today). */
+  lines: (LineEntry | { line: bigint; missing: true })[] | null;
+  /** Open line batches, newest first: the per-line node masks on both networks. */
+  batches: LineBatchSummary[];
   fulfillments: FulfilledRequest[];
   totalFulfillments: bigint;
+  hasEntropy: boolean;
   claims: ClaimEvent[];
   /** Oldest slot the RPC still serves transactions for; older claim events cannot be listed. */
   historyFromSlot: number | null;
@@ -1043,33 +1224,40 @@ export interface ActivityView {
   ecoClaimed: bigint | null;
 }
 
-export async function getActivityView(lineCount = 16): Promise<ActivityView> {
-  const [slot, header, oracle, state, claimAccts] = await Promise.all([
-    getSlot(),
-    getLineLogHeader(),
-    getOracleState(),
-    getMinterState(),
-    getClaimAccounts(),
+export async function getActivityView(lineCount = 16, cfg: NetworkConfig = NETWORK): Promise<ActivityView> {
+  const [slot, header, oracle, state, claimAccts, batches] = await Promise.all([
+    getSlot(cfg),
+    getLineLogHeader(cfg),
+    getOracleState(cfg),
+    getMinterState(cfg),
+    getClaimAccounts(cfg),
+    getOpenLineBatches(cfg).catch(() => [] as LineBatchSummary[]),
   ]);
   const currentLine = BigInt(slot) / BigInt(LINE_SLOTS);
   const last = currentLine;
   const first = last - BigInt(lineCount) + 1n;
-  const entries = header ? await getLineEntries(header, first, last) : new Map<bigint, LineEntry>();
-  const lines: ActivityView["lines"] = [];
-  for (let L = last; L >= first; L--) lines.push(entries.get(L) ?? { line: L, missing: true });
+  let lines: ActivityView["lines"] = null;
+  if (header) {
+    const entries = await getLineEntries(header, first, last, cfg);
+    lines = [];
+    for (let L = last; L >= first; L--) lines.push(entries.get(L) ?? { line: L, missing: true });
+  }
+  const entropy = hasEntropy(cfg);
   const watch = claimAccts.map((c) => c.address);
-  if (state) watch.push(addresses().ecoVault(state.mint));
+  if (state && entropy) watch.push(addresses(cfg).ecoVault(state.mint));
   const [fulfillments, claims, historyFromSlot] = await Promise.all([
-    getFulfilledRequests(50),
-    getRecentClaimEvents(watch, 40),
-    rpc<number>("getFirstAvailableBlock", []).catch(() => null),
+    getFulfilledRequests(50, cfg),
+    entropy ? getRecentClaimEvents(watch, 40, cfg) : Promise.resolve([] as ClaimEvent[]),
+    entropy ? rpc<number>("getFirstAvailableBlock", [], cfg).catch(() => null) : Promise.resolve(null),
   ]);
   return {
     slot,
     currentLine,
     lines,
+    batches,
     fulfillments,
     totalFulfillments: oracle.totalFulfillments,
+    hasEntropy: entropy,
     claims: claims.slice(0, 50),
     historyFromSlot,
     claimTotals: [...claimAccts].sort((a, b) => (b.totalClaimed > a.totalClaimed ? 1 : b.totalClaimed < a.totalClaimed ? -1 : 0)),
@@ -1089,10 +1277,10 @@ export interface MyNodeView {
   nodes: { index: number; operator: string; payout: string }[];
 }
 
-/** Client-safe: derives ["claim", wallet] under the minter and reads it, plus the node payouts. */
-export async function getMyNodeView(wallet: string): Promise<MyNodeView> {
-  const [{ address, claim }, header, oracle] = await Promise.all([getClaim(wallet), getLineLogHeader(), getOracleState()]);
-  const { slots, operators, payouts } = await nodePayouts(oracle, header);
+/** Client-safe: derives ["claim", wallet] under the minter and reads it, plus the node payouts. Testnet (ENTROPY) only. */
+export async function getMyNodeView(wallet: string, cfg: NetworkConfig = NETWORK): Promise<MyNodeView> {
+  const [{ address, claim }, header, oracle] = await Promise.all([getClaim(wallet, cfg), getLineLogHeader(cfg), getOracleState(cfg)]);
+  const { slots, operators, payouts } = await nodePayouts(oracle, header, cfg);
   const nodes = slots.map((n, k) => ({ index: n.index, operator: operators[k], payout: payouts[k] }));
   return {
     wallet,
@@ -1114,15 +1302,26 @@ export interface RecentEvent {
   line: bigint | null;
 }
 
-/** Newest fulfilled requests: only fulfilled_at, request_slot and binding (bytes 113..138) cross the wire. */
+/**
+ * Newest fulfilled requests: only requested_at, fulfilled_at, request_slot and binding (bytes 105..138) cross the
+ * wire.
+ */
 async function getRecentFulfillments(limit: number, cfg: NetworkConfig = NETWORK) {
   const accts = await getProgramAccounts(
     cfg.geroProgram,
     [{ dataSize: REQUEST_LEN }, memcmp(0, disc("RandomnessRequest")), memcmp(104, new Uint8Array([REQUEST_STATUS_FULFILLED]))],
-    { offset: 113, length: 25 },
+    { offset: 105, length: 33 },
+    cfg,
   );
   return accts
-    .map((a) => ({ address: a.address, fulfilledAt: Number(i64(a.data, 0)), line: u64(a.data, 17) & LINE_MASK_BITS }))
+    .map((a) => ({
+      address: a.address,
+      requestedAt: Number(i64(a.data, 0)),
+      fulfilledAt: Number(i64(a.data, 8)),
+      requestSlot: u64(a.data, 17),
+      line: u64(a.data, 25) & LINE_MASK_BITS,
+      mask: Number(u64(a.data, 25) >> 56n),
+    }))
     .sort((x, y) => y.fulfilledAt - x.fulfilledAt)
     .slice(0, limit);
 }
@@ -1130,31 +1329,35 @@ async function getRecentFulfillments(limit: number, cfg: NetworkConfig = NETWORK
 /** How far back the Overview looks for the newest on-time line; "live" needs one within the 32-line cutoff. */
 const OVERVIEW_LINES = 64n;
 
-export interface TestnetOverview {
+export interface Overview {
   live: boolean;
   paused: boolean;
   totalRequests: bigint;
   totalFulfillments: bigint;
+  requestFeeLamports: bigint;
   nodesOnline: number;
   nodesListed: number;
-  /** null when the minter is not initialized */
+  hasLineRecord: boolean;
+  /** null where ENTROPY is not deployed or the minter is not initialized */
   entropy: { supply: bigint | null; era: number; ratePerLine: bigint; nextHalvingLine: bigint; linesToHalving: bigint } | null;
   events: RecentEvent[] | null;
 }
 
 /**
- * Everything the testnet Overview shows and nothing more: OracleState, the last 64 line-record entries (not the whole
- * ring), the minter's start line and the mint supply, and the newest fulfilled requests and claims.
+ * Everything the Overview shows and nothing more: OracleState, the last 64 line-record entries (not the whole ring)
+ * where a record exists, the minter's start line and the mint supply where ENTROPY is deployed, and the newest
+ * fulfilled requests and claims.
  */
-export async function getTestnetOverview(feedRows = 6): Promise<TestnetOverview> {
-  const [slot, oracle, header, state] = await Promise.all([getSlot(), getOracleState(), getLineLogHeader(), getMinterState()]);
+export async function getOverview(feedRows = 6, cfg: NetworkConfig = NETWORK): Promise<Overview> {
+  const [slot, oracle, header, state] = await Promise.all([getSlot(cfg), getOracleState(cfg), getLineLogHeader(cfg), getMinterState(cfg)]);
   const currentLine = BigInt(slot) / BigInt(LINE_SLOTS);
-  const entriesP = header && !header.defect ? getLineEntries(header, currentLine - OVERVIEW_LINES + 1n, currentLine) : Promise.resolve(new Map<bigint, LineEntry>());
+  const entropy = hasEntropy(cfg);
+  const entriesP = header && !header.defect ? getLineEntries(header, currentLine - OVERVIEW_LINES + 1n, currentLine, cfg) : Promise.resolve(new Map<bigint, LineEntry>());
   const events = (async (): Promise<RecentEvent[]> => {
-    const [fulfilled, claimAccts] = await Promise.all([getRecentFulfillments(feedRows), getClaimAccounts()]);
+    const [fulfilled, claimAccts] = await Promise.all([getRecentFulfillments(feedRows, cfg), getClaimAccounts(cfg)]);
     const watch = claimAccts.map((c) => c.address);
-    if (state) watch.push(addresses().ecoVault(state.mint));
-    const claims = await getRecentClaimEvents(watch, feedRows).catch(() => [] as ClaimEvent[]);
+    if (state && entropy) watch.push(addresses(cfg).ecoVault(state.mint));
+    const claims = entropy ? await getRecentClaimEvents(watch, feedRows, cfg).catch(() => [] as ClaimEvent[]) : [];
     return [
       ...fulfilled.map((f) => ({ kind: "fulfilled" as const, time: f.fulfilledAt, ref: f.address, amount: null, line: f.line })),
       ...claims.map((c) => ({
@@ -1168,22 +1371,25 @@ export async function getTestnetOverview(feedRows = 6): Promise<TestnetOverview>
       .sort((a, b) => (b.time ?? 0) - (a.time ?? 0))
       .slice(0, feedRows);
   })().catch(() => null);
-  const [entries, mint, ev] = await Promise.all([entriesP, state ? getMintSupply(state.mint).catch(() => null) : null, events]);
+  const [entries, mint, ev] = await Promise.all([entriesP, state ? getMintSupply(state.mint, cfg).catch(() => null) : null, events]);
 
   let newest: bigint | null = null;
   entries.forEach((e) => {
     if (e.flags & LINE_FLAG_FINAL && e.onTimeMask !== 0 && (newest === null || e.line > newest)) newest = e.line;
   });
   const listed = oracle.nodes.filter((n) => !isZeroKey(n.operator));
-  const n = NETWORK.linesPerEra;
+  const nodesOnline = listed.filter((x) => isOnline(x, currentLine)).length;
+  const n = cfg.linesPerEra;
   const nh = state ? nextHalvingLine(state.startLine, currentLine, n) : 0n;
   return {
-    live: !oracle.paused && newest !== null && currentLine - (newest as bigint) <= BigInt(LINE_LOG_WRITE_CUTOFF_LINES),
+    live: !oracle.paused && (header ? newest !== null && currentLine - (newest as bigint) <= BigInt(LINE_LOG_WRITE_CUTOFF_LINES) : nodesOnline > 0),
     paused: oracle.paused,
     totalRequests: oracle.totalRequests,
     totalFulfillments: oracle.totalFulfillments,
-    nodesOnline: listed.filter((x) => isOnline(x, currentLine)).length,
+    requestFeeLamports: oracle.requestFeeLamports,
+    nodesOnline,
     nodesListed: listed.length,
+    hasLineRecord: header !== null,
     entropy: state
       ? {
           supply: mint && mint.owner === TOKEN_2022 ? mint.supply : null,
